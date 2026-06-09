@@ -1,0 +1,107 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body {
+    @apply font-spline bg-beige text-navy antialiased;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-sora;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-white rounded-2xl p-7 shadow-soft border border-gray-200;
+  }
+  .card-title {
+    @apply text-navy font-sora font-bold text-xl mb-2;
+  }
+  .card-desc {
+    @apply text-gray-500 text-sm mb-6;
+  }
+
+  /* Boutons */
+  .btn-primary {
+    @apply bg-navy text-white font-sora font-semibold px-6 py-3 rounded-xl
+           transition-all hover:bg-navy-deep hover:text-gold disabled:opacity-50
+           disabled:cursor-not-allowed;
+  }
+  .btn-secondary {
+    @apply bg-white border border-gray-300 text-navy font-sora font-semibold
+           px-5 py-2.5 rounded-xl transition-all hover:bg-gray-50;
+  }
+  .btn-success {
+    @apply bg-green-500 text-white font-sora font-semibold px-6 py-3 rounded-xl
+           transition-all hover:bg-green-600 disabled:opacity-50;
+  }
+
+  /* Inputs */
+  .input-field {
+    @apply w-full bg-white border-2 border-gray-200 rounded-xl px-4 py-2.5
+           text-navy text-sm transition-colors focus:border-navy focus:outline-none;
+  }
+  .label-text {
+    @apply font-sora font-semibold text-sm text-navy mb-1.5 block;
+  }
+
+  /* Cards de métriques */
+  .metric-card {
+    @apply rounded-2xl p-5 text-white relative overflow-hidden;
+  }
+  .metric-value {
+    @apply font-sora text-3xl font-extrabold leading-none;
+  }
+  .metric-label {
+    @apply text-xs opacity-90 mt-2 font-medium;
+  }
+
+  /* Badges */
+  .badge {
+    @apply inline-block px-2.5 py-1 rounded-md text-xs font-semibold;
+  }
+  .badge-required {
+    @apply bg-green-100 text-green-800;
+  }
+  .badge-optional {
+    @apply bg-yellow-100 text-yellow-800;
+  }
+
+  /* Severite */
+  .sev-high { @apply bg-red-50 text-red-800 border-red-500; }
+  .sev-med  { @apply bg-orange-50 text-orange-800 border-orange-500; }
+  .sev-low  { @apply bg-blue-50 text-blue-800 border-blue-500; }
+  .sev-ok   { @apply bg-green-50 text-green-800 border-green-500; }
+
+  /* Animations */
+  .fade-in { @apply animate-fade-in; }
+  .slide-up { @apply animate-slide-up; }
+
+  /* Divider décoratif */
+  .divider-fancy {
+    @apply flex items-center gap-3 my-4;
+  }
+  .divider-fancy::before,
+  .divider-fancy::after {
+    content: '';
+    @apply flex-1 h-0.5 rounded-full opacity-60;
+    background: linear-gradient(90deg, transparent 0%, #EFC71A 30%, #13263D 60%, #8B5CF6 100%);
+  }
+}
+
+/* Scrollbar custom */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: #F4F7FA;
+}
+::-webkit-scrollbar-thumb {
+  background: #13263D;
+  border-radius: 5px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #0D1B2C;
+}

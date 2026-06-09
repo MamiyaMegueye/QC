@@ -1,0 +1,44 @@
+# === SECRETS ===
+.env
+.env.local
+.env.production
+*.env
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+venv/
+.venv/
+env/
+
+# === Node ===
+node_modules/
+dist/
+dist-ssr/
+*.local
+.vite/
+
+# === Editeurs ===
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# === Logs ===
+*.log
+logs/
+
+# === Temp ===
+*.tmp
+*.bak
+*.swp
+cache/
+temp/
+
+# === Tests / Coverage ===
+.pytest_cache/
+.coverage
+htmlcov/
+.ipynb_checkpoints/
