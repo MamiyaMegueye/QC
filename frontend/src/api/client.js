@@ -19,18 +19,45 @@ async function jsonFetch(path, options = {}) {
 }
 
 export const api = {
-  // Healthcheck
   health: () => jsonFetch("/api/health"),
 
-  // Test cle API
   testKey: (apiName, apiKey) =>
     jsonFetch("/api/test-key", {
       method: "POST",
       body: JSON.stringify({ api: apiName, api_key: apiKey }),
     }),
 
-  // Upload + analyse
-  analyze: async (dataFile, dictFile, formFile, params) => {
+  // Lecture rapide : { columns, auto_mapping, profile }
+  previewColumns: async (dataFile, dictFile) => {
+    const formData = new FormData()
+    formData.append("data_file", dataFile)
+    if (dictFile) formData.append("dict_file", dictFile)
+    const res = await fetch(`${API_URL}/api/preview-columns`, {
+      method: "POST",
+      body: formData,
+    })
+    if (!res.ok) {
+      let msg = `Erreur ${res.status}`
+      try {
+        const data = await res.json()
+        msg = data.detail || msg
+      } catch {}
+      throw new Error(msg)
+    }
+    return res.json()
+  },
+
+  // Upload + analyse complete
+  //   columnMapping     : { enqueteur, id, start, end, lat, lon } -- optionnel
+  //   variableOverrides : { nom_variable: {type, label, ignore} } -- optionnel
+  analyze: async (
+    dataFile,
+    dictFile,
+    formFile,
+    params,
+    columnMapping = null,
+    variableOverrides = null
+  ) => {
     const formData = new FormData()
     formData.append("data_file", dataFile)
     if (dictFile) formData.append("dict_file", dictFile)
@@ -38,6 +65,12 @@ export const api = {
     formData.append("duree_min", params?.duree_min || 18)
     formData.append("iqr_k", params?.iqr_k || 1.5)
     formData.append("missing_seuil", params?.missing_seuil || 50)
+    if (columnMapping && Object.keys(columnMapping).length > 0) {
+      formData.append("column_mapping", JSON.stringify(columnMapping))
+    }
+    if (variableOverrides && Object.keys(variableOverrides).length > 0) {
+      formData.append("variable_overrides", JSON.stringify(variableOverrides))
+    }
     const res = await fetch(`${API_URL}/api/analyze`, {
       method: "POST",
       body: formData,
@@ -53,22 +86,18 @@ export const api = {
     return res.json()
   },
 
-  // Generer regles IA
   generateRules: (payload) =>
     jsonFetch("/api/generate-rules", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
 
-  // Bilan enqueteurs
   getEnqueteurSummary: (sessionId) =>
     jsonFetch(`/api/session/${sessionId}/enqueteur-summary`),
 
-  // Export Excel
   getExportUrl: (sessionId) =>
     `${API_URL}/api/session/${sessionId}/export-excel`,
 
-  // Recalcul QC basique
   recomputeBasic: async (sessionId, params) => {
     const formData = new FormData()
     formData.append("duree_min", params.duree_min)
@@ -81,7 +110,34 @@ export const api = {
     return res.json()
   },
 
-  // Liberer session
   deleteSession: (sessionId) =>
     jsonFetch(`/api/session/${sessionId}`, { method: "DELETE" }),
+
+  // === RAPPORT ANALYTIQUE ===
+
+  generateReportPreview: (sessionId, payload) =>
+    jsonFetch(`/api/session/${sessionId}/generate-report-preview`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  downloadReport: async (sessionId, reportContent = null) => {
+    const res = await fetch(
+      `${API_URL}/api/session/${sessionId}/download-report`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ report_content: reportContent }),
+      }
+    )
+    if (!res.ok) {
+      let msg = `Erreur ${res.status}`
+      try {
+        const data = await res.json()
+        msg = data.detail || msg
+      } catch {}
+      throw new Error(msg)
+    }
+    return res.blob()
+  },
 }

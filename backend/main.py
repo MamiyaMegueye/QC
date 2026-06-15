@@ -1,21 +1,26 @@
 """
 SISTA QC — Backend FastAPI
-Expose les fonctionnalites du moteur QC via une API REST consommable par React.
 
 Endpoints :
-  GET  /                            -> healthcheck
-  GET  /api/health                  -> statut + config
-  POST /api/test-key                -> tester une cle API
-  POST /api/analyze                 -> upload fichier + analyse QC basique
-  POST /api/generate-rules          -> generer regles IA + executer
-  GET  /api/session/{id}/enqueteur-summary -> bilan enqueteurs
-  GET  /api/session/{id}/export-excel      -> export Excel
+  GET  /                                                  -> healthcheck
+  GET  /api/health                                        -> statut + config
+  POST /api/test-key                                      -> tester une cle API
+  POST /api/preview-columns                               -> colonnes + auto-mapping + profil complet
+  POST /api/analyze                                       -> upload + analyse QC basique (avec overrides)
+  POST /api/generate-rules                                -> generer regles IA + executer
+  GET  /api/session/{id}/enqueteur-summary                -> bilan enqueteurs
+  GET  /api/session/{id}/export-excel                     -> export Excel
+  POST /api/session/{id}/recompute-basic                  -> recalcul QC basique
+  POST /api/session/{id}/generate-report-preview          -> apercu du rapport analytique (JSON)
+  POST /api/session/{id}/download-report                  -> telecharge le .docx
+  DELETE /api/session/{id}                                -> libere session
 """
 
 from __future__ import annotations
 
 import io
 import os
+import json
 import uuid
 import tempfile
 from typing import Optional
@@ -26,7 +31,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel
 
-# Charger le .env si present
 try:
     from dotenv import load_dotenv
     load_dotenv()
@@ -34,21 +38,22 @@ except ImportError:
     pass
 
 from core.loader import load_file
-from core.profiler import profile_dataset
-from core.qc_basic import run_basic_qc, build_enqueteur_summary, global_stats
+from core.profiler import profile_dataset, apply_overrides
+from core.qc_basic import (
+    run_basic_qc,
+    build_enqueteur_summary,
+    global_stats,
+    auto_map,
+)
 from core import ai_agent
-
-# ----------------------------------------------------------------------
-#  App + CORS
-# ----------------------------------------------------------------------
+from core import analytical_report
 
 app = FastAPI(
     title="SISTA QC API",
     description="API REST pour le moteur de Controle Qualite SISTA",
-    version="1.0.0",
+    version="1.3.0",
 )
 
-# CORS : autorise React (Vercel + localhost)
 ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://localhost:3000",
@@ -67,10 +72,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ----------------------------------------------------------------------
-#  Stockage en memoire des sessions (en prod : Redis)
-# ----------------------------------------------------------------------
-
 SESSIONS: dict = {}
 
 
@@ -85,12 +86,8 @@ def _get_session(session_id: str) -> dict:
     return s
 
 
-# ----------------------------------------------------------------------
-#  Models
-# ----------------------------------------------------------------------
-
 class TestKeyRequest(BaseModel):
-    api: str  # "api1" ou "api2"
+    api: str
     api_key: str
 
 
@@ -105,12 +102,20 @@ class GenerateRulesRequest(BaseModel):
     form_content: str = ""
 
 
-# ----------------------------------------------------------------------
-#  Helpers
-# ----------------------------------------------------------------------
+class GenerateReportPreviewRequest(BaseModel):
+    api: str
+    api_key: str = ""
+    survey_type: str = ""
+    survey_description: str = ""
+    survey_population: str = ""
+    survey_eligibility: str = ""
+
+
+class DownloadReportRequest(BaseModel):
+    report_content: Optional[dict] = None
+
 
 def _save_upload(file: UploadFile) -> str:
-    """Sauvegarde un UploadFile dans un fichier temporaire."""
     suffix = os.path.splitext(file.filename)[1]
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
     content = file.file.read()
@@ -121,7 +126,6 @@ def _save_upload(file: UploadFile) -> str:
 
 
 def _clean_error_msg(e: Exception) -> str:
-    """Retire les mentions des providers dans les messages d'erreur."""
     msg = str(e)
     for term in ["Anthropic", "anthropic", "Claude", "claude",
                  "Groq", "groq", "sk-ant", "gsk_"]:
@@ -129,22 +133,23 @@ def _clean_error_msg(e: Exception) -> str:
     return msg[:300]
 
 
-# ----------------------------------------------------------------------
-#  ENDPOINTS
-# ----------------------------------------------------------------------
+def _resolve_api_key(api: str, key_from_request: str) -> str:
+    if key_from_request:
+        return key_from_request
+    if api == "api1":
+        return os.environ.get("ANTHROPIC_API_KEY", "")
+    elif api == "api2":
+        return os.environ.get("GROQ_API_KEY", "")
+    return ""
+
 
 @app.get("/")
 def root():
-    return {
-        "name": "SISTA QC API",
-        "status": "online",
-        "version": "1.0.0",
-    }
+    return {"name": "SISTA QC API", "status": "online", "version": "1.3.0"}
 
 
 @app.get("/api/health")
 def health():
-    """Indique l'etat du backend et la presence des cles dans .env."""
     return {
         "status": "ok",
         "api1_configured": bool(os.environ.get("ANTHROPIC_API_KEY", "")),
@@ -155,25 +160,46 @@ def health():
 
 @app.post("/api/test-key")
 def test_key(req: TestKeyRequest):
-    """Teste si une cle API est valide.
-    Si req.api_key est vide, utilise la cle du .env."""
     try:
-        # Fallback : utiliser la cle du .env si le champ est vide
-        key_to_test = req.api_key
-        if not key_to_test:
-            if req.api == "api1":
-                key_to_test = os.environ.get("ANTHROPIC_API_KEY", "")
-            elif req.api == "api2":
-                key_to_test = os.environ.get("GROQ_API_KEY", "")
-
+        key_to_test = _resolve_api_key(req.api, req.api_key)
         if not key_to_test:
             return {"ok": False,
                     "message": "Aucune cle disponible (ni dans le champ ni dans .env)"}
-
         ok, msg = ai_agent.test_api_key(req.api, key_to_test)
         return {"ok": ok, "message": msg}
     except Exception as e:
         return {"ok": False, "message": _clean_error_msg(e)}
+
+
+@app.post("/api/preview-columns")
+async def preview_columns(
+    data_file: UploadFile = File(...),
+    dict_file: Optional[UploadFile] = File(None),
+):
+    """
+    Lecture rapide du fichier pour la revue dans Step1.
+    Renvoie :
+      - columns        : liste des colonnes (dans l'ordre du fichier)
+      - auto_mapping   : { enqueteur, id, start, end, lat, lon }
+      - profile        : profil complet (variables auto-detectees) pour la revue
+    N'effectue PAS le QC complet.
+    """
+    try:
+        data_path = _save_upload(data_file)
+        dict_path = _save_upload(dict_file) if dict_file else None
+        loaded = load_file(data_path, dict_path)
+        profile = profile_dataset(loaded)
+        cols = [str(c) for c in loaded.df.columns]
+        mp = auto_map(loaded.df.columns)
+        mp_clean = {k: (v if v else "") for k, v in mp.items()}
+        return {
+            "columns": cols,
+            "auto_mapping": mp_clean,
+            "n_columns": len(cols),
+            "profile": profile,
+        }
+    except Exception as e:
+        raise HTTPException(500, f"Erreur de lecture du fichier : {e}")
 
 
 @app.post("/api/analyze")
@@ -184,17 +210,13 @@ async def analyze(
     duree_min: int = Form(18),
     iqr_k: float = Form(1.5),
     missing_seuil: int = Form(50),
+    column_mapping: str = Form(""),
+    variable_overrides: str = Form(""),
 ):
-    """
-    Upload + profilage + QC basique.
-    Retourne session_id pour les operations suivantes.
-    """
     try:
-        # Sauvegarder les fichiers
         data_path = _save_upload(data_file)
         dict_path = _save_upload(dict_file) if dict_file else None
 
-        # Form Kobo (lecture brute pour transmettre a l'IA)
         form_content = ""
         if form_file is not None:
             try:
@@ -218,16 +240,40 @@ async def analyze(
             except Exception as fe:
                 form_content = f"(Formulaire non lisible : {fe})"
 
-        # Charger + profiler + QC basique
         loaded = load_file(data_path, dict_path)
         profile = profile_dataset(loaded)
-        params = {"duree_min": duree_min, "iqr_k": iqr_k, "missing_seuil": missing_seuil}
-        results, mp = run_basic_qc(loaded, profile, params=params)
 
-        # Stats globales
+        # ───────────────────────────────────────────────────────────────
+        # Appliquer les overrides utilisateur (Step1 -- revue variables)
+        # avant de lancer QC, AI, etc.
+        # ───────────────────────────────────────────────────────────────
+        if variable_overrides:
+            try:
+                ov = json.loads(variable_overrides)
+                if isinstance(ov, dict) and ov:
+                    profile = apply_overrides(profile, ov)
+            except Exception as e:
+                print(f"[analyze] variable_overrides invalides, ignores : {e}")
+
+        params = {"duree_min": duree_min, "iqr_k": iqr_k, "missing_seuil": missing_seuil}
+
+        # ───────────────────────────────────────────────────────────────
+        # Fusion mapping utilisateur + auto-detection
+        # ───────────────────────────────────────────────────────────────
+        user_mp = {}
+        if column_mapping:
+            try:
+                parsed = json.loads(column_mapping)
+                user_mp = {k: v for k, v in parsed.items()
+                           if v and str(v).strip()}
+            except Exception:
+                user_mp = {}
+        auto_mp = auto_map(loaded.df.columns)
+        final_mp = {**auto_mp, **user_mp}
+
+        results, mp = run_basic_qc(loaded, profile, mp=final_mp, params=params)
         stats = global_stats(profile, results)
 
-        # Creer la session
         session_id = str(uuid.uuid4())
         _save_session(session_id, {
             "loaded": loaded,
@@ -241,9 +287,9 @@ async def analyze(
             "ai_rules": None,
             "ai_comment": None,
             "ai_metrics": None,
+            "report_content": None,
         })
 
-        # Preview des donnees (20 lignes)
         preview = loaded.df.head(20).fillna("").astype(str).to_dict(orient="records")
 
         return {
@@ -263,7 +309,7 @@ async def analyze(
                         "lignes": [
                             {k: (v if not isinstance(v, (pd.Timestamp,))
                                  else str(v)) for k, v in row.items()}
-                            for row in r["lignes"][:200]  # limite pour reponse JSON
+                            for row in r["lignes"][:200]
                         ],
                     }
                     for r in results
@@ -279,24 +325,13 @@ async def analyze(
 
 @app.post("/api/generate-rules")
 def generate_rules(req: GenerateRulesRequest):
-    """
-    Genere les regles QC via IA puis les execute sur le DataFrame.
-    Si req.api_key est vide, utilise la cle du .env.
-    """
     sess = _get_session(req.session_id)
     progress_log = []
 
     def progress_cb(msg):
         progress_log.append(msg)
 
-    # Fallback sur .env si la cle du champ est vide
-    key_to_use = req.api_key
-    if not key_to_use:
-        if req.api == "api1":
-            key_to_use = os.environ.get("ANTHROPIC_API_KEY", "")
-        elif req.api == "api2":
-            key_to_use = os.environ.get("GROQ_API_KEY", "")
-
+    key_to_use = _resolve_api_key(req.api, req.api_key)
     if not key_to_use:
         raise HTTPException(400, "Aucune cle API disponible (ni dans l'interface ni dans .env)")
 
@@ -314,7 +349,6 @@ def generate_rules(req: GenerateRulesRequest):
         )
         ai_res = ai_agent.run_rules(sess["loaded"].df, rules, sess["mp"])
 
-        # Stocker en session
         sess["ai_rules"] = rules
         sess["ai_results"] = ai_res
         sess["ai_comment"] = comment
@@ -345,7 +379,6 @@ def generate_rules(req: GenerateRulesRequest):
 
 @app.get("/api/session/{session_id}/enqueteur-summary")
 def enqueteur_summary(session_id: str):
-    """Bilan par enqueteur (combine QC basique + IA si dispo)."""
     sess = _get_session(session_id)
     all_results = list(sess["results"])
     if sess.get("ai_results"):
@@ -364,7 +397,6 @@ def enqueteur_summary(session_id: str):
 
 @app.get("/api/session/{session_id}/export-excel")
 def export_excel(session_id: str):
-    """Export Excel multi-feuilles : cas detectes + synthese enqueteurs + regles."""
     sess = _get_session(session_id)
     ai_res = sess.get("ai_results")
     rules = sess.get("ai_rules") or []
@@ -374,7 +406,6 @@ def export_excel(session_id: str):
 
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        # Feuille 1 : cas detectes
         cas_list = ai_res["lignes"]
         df_cas = pd.DataFrame([{
             "Cas N": i + 1,
@@ -391,7 +422,6 @@ def export_excel(session_id: str):
         } for i, c in enumerate(cas_list)])
         df_cas.to_excel(writer, sheet_name="Cas detectes", index=False)
 
-        # Feuille 2 : synthese enqueteurs
         df_enq = pd.DataFrame(cas_list)
         if "Enqueteur" in df_enq.columns:
             synth = df_enq.groupby("Enqueteur").agg(
@@ -400,7 +430,6 @@ def export_excel(session_id: str):
             ).reset_index().sort_values("Nb_anomalies", ascending=False)
             synth.to_excel(writer, sheet_name="Synthese enqueteurs", index=False)
 
-        # Feuille 3 : regles IA
         if rules:
             df_rules = pd.DataFrame([{
                 "N": i + 1,
@@ -425,10 +454,11 @@ def export_excel(session_id: str):
 def recompute_basic(session_id: str, duree_min: int = Form(18),
                     iqr_k: float = Form(1.5),
                     missing_seuil: int = Form(50)):
-    """Recalcule les tests QC basique avec de nouveaux parametres."""
     sess = _get_session(session_id)
     params = {"duree_min": duree_min, "iqr_k": iqr_k, "missing_seuil": missing_seuil}
-    results, mp = run_basic_qc(sess["loaded"], sess["profile"], params=params)
+    existing_mp = sess.get("mp")
+    results, mp = run_basic_qc(sess["loaded"], sess["profile"],
+                                mp=existing_mp, params=params)
     sess["results"] = results
     sess["mp"] = mp
     sess["params"] = params
@@ -436,18 +466,86 @@ def recompute_basic(session_id: str, duree_min: int = Form(18),
     return {"ok": True, "results": results, "stats": stats, "mp": mp}
 
 
+@app.post("/api/session/{session_id}/generate-report-preview")
+def generate_report_preview(session_id: str, req: GenerateReportPreviewRequest):
+    sess = _get_session(session_id)
+
+    key_to_use = _resolve_api_key(req.api, req.api_key)
+    if not key_to_use:
+        raise HTTPException(400, "Aucune cle API disponible (ni dans l'interface ni dans .env)")
+
+    progress_log = []
+
+    def progress_cb(msg):
+        progress_log.append(msg)
+        print(f"[REPORT] {msg}")
+
+    try:
+        survey_context = {
+            "type": req.survey_type,
+            "description": req.survey_description,
+            "population": req.survey_population,
+            "eligibility": req.survey_eligibility,
+        }
+
+        qc_stats = None
+        try:
+            qc_stats = global_stats(sess["profile"], sess["results"])
+        except Exception:
+            pass
+
+        content = analytical_report.build_report_content(
+            api=req.api,
+            api_key=key_to_use,
+            df=sess["loaded"].df,
+            profile=sess["profile"],
+            survey_context=survey_context,
+            filename=sess["filename"],
+            qc_results=sess.get("results", []),
+            qc_stats=qc_stats,
+            progress_cb=progress_cb,
+        )
+
+        sess["report_content"] = content
+
+        return {
+            "ok": True,
+            "content": content,
+            "progress": progress_log,
+        }
+    except Exception as e:
+        raise HTTPException(500, f"Erreur de generation du rapport : {_clean_error_msg(e)}")
+
+
+@app.post("/api/session/{session_id}/download-report")
+def download_report(session_id: str, req: DownloadReportRequest):
+    sess = _get_session(session_id)
+
+    content = req.report_content or sess.get("report_content")
+    if not content:
+        raise HTTPException(404, "Aucun rapport en session. Generez d'abord l'apercu.")
+
+    try:
+        docx_bytes = analytical_report.compose_word_from_content(content)
+        base = sess["filename"].rsplit(".", 1)[0]
+        out_filename = f"{base}_rapport_analytique.docx"
+
+        return StreamingResponse(
+            io.BytesIO(docx_bytes),
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={"Content-Disposition": f'attachment; filename="{out_filename}"'}
+        )
+    except Exception as e:
+        raise HTTPException(500, f"Erreur de composition du Word : {_clean_error_msg(e)}")
+
+
 @app.delete("/api/session/{session_id}")
 def delete_session(session_id: str):
-    """Libere la memoire d'une session."""
     if session_id in SESSIONS:
         del SESSIONS[session_id]
         return {"ok": True}
     raise HTTPException(404, "Session introuvable")
 
-
-# ----------------------------------------------------------------------
-#  Lancement local
-# ----------------------------------------------------------------------
 
 if __name__ == "__main__":
     import uvicorn

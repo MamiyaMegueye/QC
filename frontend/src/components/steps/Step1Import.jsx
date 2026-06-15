@@ -32,7 +32,6 @@ export default function Step1Import() {
   const handleTestKey = async () => {
     const apiName = store.selectedApi
     const key = apiName === "api1" ? store.apiKey1 : store.apiKey2
-    // Pas de blocage si key vide : le backend utilisera le .env en fallback
     setTesting(true)
     try {
       const res = await api.testKey(apiName, key)
@@ -86,8 +85,6 @@ export default function Step1Import() {
     store.selectedApi === "api1" ? store.apiKey1 : store.apiKey2
   const currentConfigured =
     store.selectedApi === "api1" ? store.api1Configured : store.api2Configured
-
-  // Le bouton Tester est cliquable si le champ est rempli OU si .env est configure
   const canTest = (currentKey && currentKey.length > 0) || currentConfigured
 
   return (
@@ -137,9 +134,7 @@ export default function Step1Import() {
       {/* Configuration IA */}
       <div className="card">
         <h3 className="card-title">Configuration de l'IA</h3>
-        <p className="card-desc">
-          
-        </p>
+        <p className="card-desc"></p>
 
         {/* Radio API */}
         <div className="flex gap-3 mb-4">
@@ -156,7 +151,7 @@ export default function Step1Import() {
                     : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                 }`}
               >
-                {apiName === "api1" ? "API 1 (plus efficace)" : "API 2"}
+                {apiName === "api1" ? "API 1 (Plus efficace)" : "API 2"}
                 {configured && (
                   <span
                     className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-green-400"
@@ -168,12 +163,11 @@ export default function Step1Import() {
           })}
         </div>
 
-        {/* Statut .env */}
         {currentConfigured && (
           <div className="bg-green-50 border border-green-200 rounded-xl p-3 mb-3 flex items-center gap-2">
             <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
             <span className="text-sm text-green-800 font-medium">
-              Clé {store.selectedApi === "api1" ? "API 1" : "API 2"} 
+              Clé {store.selectedApi === "api1" ? "API 1" : "API 2"}
             </span>
           </div>
         )}
@@ -183,15 +177,12 @@ export default function Step1Import() {
             <XCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
             <div className="text-sm text-amber-800">
               <p className="font-medium m-0">
-                Aucune clé {store.selectedApi === "api1" ? "API 1" : "API 2"}{" "}
-                trouvée dans le fichier .env
+                Aucune clé {store.selectedApi === "api1" ? "API 1" : "API 2"} trouvée dans le fichier .env
               </p>
               <p className="text-xs mt-1 m-0">
                 Saisissez manuellement la clé ci-dessous, ou ajoutez{" "}
                 <code className="bg-amber-100 px-1 rounded font-mono">
-                  {store.selectedApi === "api1"
-                    ? "ANTHROPIC_API_KEY"
-                    : "GROQ_API_KEY"}
+                  {store.selectedApi === "api1" ? "ANTHROPIC_API_KEY" : "GROQ_API_KEY"}
                 </code>{" "}
                 dans backend/.env puis redémarrez le backend.
               </p>
@@ -199,16 +190,10 @@ export default function Step1Import() {
           </div>
         )}
 
-        {/* Saisie de clé (override) */}
         <div className="grid grid-cols-1 md:grid-cols-[1fr,auto] gap-3 items-end">
           <div>
             <label className="label-text">
               Clé {store.selectedApi === "api1" ? "API 1" : "API 2"}
-              {currentConfigured && (
-                <span className="text-gray-500 font-normal ml-2">
-                  
-                </span>
-              )}
             </label>
             <input
               type="password"
@@ -219,11 +204,7 @@ export default function Step1Import() {
                   ? store.setApiKey1(e.target.value)
                   : store.setApiKey2(e.target.value)
               }
-              placeholder={
-                currentConfigured
-                  ? ""
-                  : ""
-              }
+              placeholder=""
             />
           </div>
           <button
@@ -263,8 +244,7 @@ export default function Step1Import() {
             Contexte de l'enquête
           </p>
           <p className="text-gray-600 text-xs mt-1 m-0">
-            Plus les informations sont riches, meilleures sont les règles générées
-            par l'IA.
+            Plus les informations sont riches, meilleures sont les règles générées par l'IA.
           </p>
         </div>
 
@@ -277,9 +257,7 @@ export default function Step1Import() {
               onChange={(e) => handleTypeChoiceChange(e.target.value)}
             >
               {TYPES_ENQUETE.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
+                <option key={t} value={t}>{t}</option>
               ))}
             </select>
           </div>
@@ -314,8 +292,6 @@ export default function Step1Import() {
             placeholder=""
           />
         </div>
-
- 
       </div>
 
       {/* Divider */}

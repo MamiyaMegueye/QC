@@ -5,6 +5,7 @@ const STEPS = [
   { num: 1, label: "Importer" },
   { num: 2, label: "Détecter" },
   { num: 3, label: "Rapport QC" },
+  { num: 4, label: "Rapport analytique" },
 ]
 
 export default function Stepper() {
@@ -20,7 +21,7 @@ export default function Stepper() {
 
   const canGoTo = (num) => {
     if (num === 1) return true
-    return !!sessionId // doit avoir analysé un fichier d'abord
+    return !!sessionId
   }
 
   return (

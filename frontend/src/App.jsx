@@ -8,6 +8,7 @@ import InfoBanner from "./components/InfoBanner"
 import Step1Import from "./components/steps/Step1Import"
 import Step2Detect from "./components/steps/Step2Detect"
 import Step3Report from "./components/steps/Step3Report"
+import Step4AnalyticalReport from "./components/steps/Step4AnalyticalReport"
 import { AlertCircle } from "lucide-react"
 
 export default function App() {
@@ -54,6 +55,7 @@ export default function App() {
         {currentStep === 1 && <Step1Import />}
         {currentStep === 2 && <Step2Detect />}
         {currentStep === 3 && <Step3Report />}
+        {currentStep === 4 && <Step4AnalyticalReport />}
       </div>
     </div>
   )

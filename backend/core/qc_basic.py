@@ -17,6 +17,9 @@ où chaque ligne porte _index, _enqueteur, _probleme.
 
 Le mapping des colonnes-clés est détecté par mots-clés (auto_map),
 mais peut être surchargé par l'utilisateur ou par l'agent IA.
+
+v2 : détection enquêteur élargie pour reconnaître les conventions courantes
+  (EnuName, EnumID, IntName, Interviewer, Surveyor, FieldWorker, etc.)
 """
 
 import pandas as pd
@@ -40,12 +43,45 @@ def auto_map(columns):
         return None
 
     return {
-        "start": find([r"^start$", r"d[ée]but", r"heure.*d[ée]but", r"starttime", r"_submission.*start"]),
-        "end": find([r"^end$", r"\bfin\b", r"heure.*fin", r"endtime", r"_submission.*end"]),
-        "enqueteur": find([r"enqu[êe]teur", r"\bagent\b", r"interviewer", r"releveur", r"enumerator", r"operateur", r"collecteur"]),
-        "id": find([r"id.?progres", r"^id$", r"identifiant", r"m[ée]nage.*id", r"hh.?id", r"uuid", r"num.*quest"]),
-        "lat": find([r"latitude", r"^lat$", r"_gps.*lat", r"gps.*latitude", r"_.*latitude"]),
-        "lon": find([r"longitude", r"^lon$", r"^lng$", r"_gps.*lon", r"gps.*longitude", r"_.*longitude"]),
+        "start": find([
+            r"^start$", r"d[ée]but", r"heure.*d[ée]but", r"starttime",
+            r"_submission.*start", r"start[_-]?time", r"start[_-]?date",
+        ]),
+        "end": find([
+            r"^end$", r"\bfin\b", r"heure.*fin", r"endtime",
+            r"_submission.*end", r"end[_-]?time", r"end[_-]?date",
+        ]),
+        "enqueteur": find([
+            # Français
+            r"enqu[êe]teur", r"\bagent\b", r"releveur",
+            r"op[ée]rateur", r"collecteur",
+            # Anglais
+            r"interviewer", r"enumerator", r"surveyor", r"investigator",
+            r"fieldworker", r"field[_-]worker", r"data[_-]collector",
+            # Abréviations très courantes (Enu / Enum / Int) avec ou sans suffixe
+            #   matche : Enu, EnuName, EnuID, EnumName, EnumID, EnuNom, EnuCode
+            r"\benu[mn]?(?:[_-]?(?:name|nom|id|code))?\b",
+            #   matche : IntName, Interv_id, Interv_name, Int_id
+            r"\bint(?:erv)?[_-]?(?:name|nom|id|code)\b",
+            # Composées
+            r"agent[_-]?(?:name|nom|id|code)",
+            r"surveyor[_-]?(?:name|nom|id|code)",
+            r"nom[_-]?(?:enqu|agent|operat|releveur|collecteur|enumer|surveyor|interv)",
+            r"id[_-]?(?:enqu|agent|operat|releveur|collecteur|enumer|surveyor|interv)",
+        ]),
+        "id": find([
+            r"id.?progres", r"^id$", r"identifiant",
+            r"m[ée]nage.*id", r"hh.?id", r"uuid", r"num.*quest",
+            r"household[_-]?id", r"questionnaire[_-]?id",
+        ]),
+        "lat": find([
+            r"latitude", r"^lat$", r"_gps.*lat",
+            r"gps.*latitude", r"_.*latitude",
+        ]),
+        "lon": find([
+            r"longitude", r"^lon$", r"^lng$", r"_gps.*lon",
+            r"gps.*longitude", r"_.*longitude",
+        ]),
     }
 
 

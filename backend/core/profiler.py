@@ -1,17 +1,20 @@
 """
-profiler.py — Profilage automatique du fichier (NIVEAU 1, sans IA).
+profiler.py - Profilage automatique du fichier (NIVEAU 1, sans IA).
 
 Produit pour chaque variable :
-  - type détecté (numérique / catégorielle / texte / date / identifiant)
+  - type detecte (numerique / categorielle / texte / date / identifiant)
   - taux de remplissage
   - nombre de valeurs uniques
-  - statistiques (min, max, moyenne, médiane pour numériques)
+  - statistiques (min, max, moyenne, mediane pour numeriques)
   - exemples de valeurs
 
-Et un résumé global :
+Et un resume global :
   - nombre total de variables
-  - nombre de variables numériques, catégorielles, texte, date
+  - nombre de variables numeriques, categorielles, texte, date
   - nombre de lignes
+
+v2 : ajout de apply_overrides() pour permettre la correction utilisateur
+     du type / label / ignore avant le QC.
 """
 
 import pandas as pd
@@ -19,8 +22,11 @@ import numpy as np
 import re
 
 
+VALID_TYPES = {"numérique", "catégorielle", "texte", "date", "identifiant", "vide"}
+
+
 def _try_numeric(series):
-    """Tente de convertir en numérique. Renvoie (série_num, ratio_succès)."""
+    """Tente de convertir en numerique. Renvoie (serie_num, ratio_succes)."""
     s = series.dropna().astype(str).str.replace(",", ".", regex=False).str.strip()
     if len(s) == 0:
         return None, 0.0
@@ -30,19 +36,18 @@ def _try_numeric(series):
 
 
 def _try_datetime(series):
-    """Tente de détecter des dates. Renvoie ratio de succès."""
+    """Tente de detecter des dates. Renvoie ratio de succes."""
     s = series.dropna().astype(str).str.strip()
     if len(s) == 0:
         return 0.0
     sample = s.head(50)
-    # motifs de date courants
     pat = re.compile(r"\d{1,4}[-/]\d{1,2}[-/]\d{1,4}|\d{4}-\d{2}-\d{2}")
     hits = sample.apply(lambda x: bool(pat.search(x))).sum()
     return hits / len(sample) if len(sample) else 0.0
 
 
 def detect_type(series, name="", n_rows=0):
-    """Détecte le type d'une variable."""
+    """Detecte le type d'une variable."""
     non_null = series.dropna()
     n = len(non_null)
     if n == 0:
@@ -50,26 +55,20 @@ def detect_type(series, name="", n_rows=0):
 
     uniques = non_null.astype(str).nunique()
 
-    # identifiant : presque toutes les valeurs uniques + nom évocateur
     if uniques >= 0.9 * n and (re.search(r"id|code|num|uuid|ref", str(name), re.I) or uniques == n):
-        # mais si c'est numérique continu, on le traite comme numérique plus bas
         num, ratio = _try_numeric(non_null)
         if ratio < 0.95:
             return "identifiant"
 
-    # date
     if _try_datetime(non_null) > 0.7:
         return "date"
 
-    # numérique
     num, ratio = _try_numeric(non_null)
     if ratio > 0.85:
-        # si peu de valeurs uniques -> catégorielle codée (ex: 1,2,3)
         if uniques <= 10 and uniques < 0.05 * max(n, 1):
             return "catégorielle"
         return "numérique"
 
-    # catégorielle : peu de modalités
     if uniques <= max(20, 0.05 * n):
         return "catégorielle"
 
@@ -116,7 +115,7 @@ def profile_variable(series, name="", var_label="", value_labels=None, n_rows=0)
 
 def profile_dataset(loaded):
     """
-    Profile tout le jeu de données.
+    Profile tout le jeu de donnees.
     Renvoie { summary, variables }.
     """
     df = loaded.df
@@ -133,7 +132,6 @@ def profile_dataset(loaded):
             n_rows=n_rows,
         ))
 
-    # résumé global
     type_counts = {}
     for v in variables:
         type_counts[v["type"]] = type_counts.get(v["type"], 0) + 1
@@ -155,3 +153,62 @@ def profile_dataset(loaded):
     }
 
     return {"summary": summary, "variables": variables}
+
+
+# ----------------------------------------------------------------------
+#  Application des overrides utilisateur (laissee en place pour
+#  compatibilite backend, meme si l'UI ne les envoie plus)
+# ----------------------------------------------------------------------
+
+def apply_overrides(profile, overrides):
+    """
+    Applique les corrections utilisateur au profil auto-detecte.
+    overrides : dict { nom_variable: { type, label, ignore } }
+    """
+    if not overrides:
+        return profile
+
+    kept = []
+    for var in profile["variables"]:
+        ov = overrides.get(var["name"])
+        if not ov:
+            kept.append(var)
+            continue
+
+        new_type = ov.get("type")
+        if new_type and new_type in VALID_TYPES and new_type != var["type"]:
+            var["type"] = new_type
+            var["_overridden_type"] = True
+            if new_type != "numérique":
+                var["stats"] = {}
+
+        new_label = ov.get("label")
+        if new_label is not None:
+            new_label = str(new_label).strip()
+            if new_label != var.get("label", ""):
+                var["label"] = new_label
+                var["_overridden_label"] = True
+
+        if not ov.get("ignore"):
+            kept.append(var)
+
+    profile["variables"] = kept
+
+    type_counts = {}
+    for v in kept:
+        type_counts[v["type"]] = type_counts.get(v["type"], 0) + 1
+
+    s = profile["summary"]
+    profile["summary"] = {
+        **s,
+        "n_vars": len(kept),
+        "n_numeric": type_counts.get("numérique", 0),
+        "n_categorical": type_counts.get("catégorielle", 0),
+        "n_text": type_counts.get("texte", 0),
+        "n_date": type_counts.get("date", 0),
+        "n_id": type_counts.get("identifiant", 0),
+        "n_empty": type_counts.get("vide", 0),
+        "type_counts": type_counts,
+    }
+
+    return profile
