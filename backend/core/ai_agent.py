@@ -1,7 +1,7 @@
 """
-core/ai_agent.py — Agent IA multi-API pour SISTA QC
+core/ai_agent.py - Agent IA multi-API pour SISTA QC
 
-Deux fournisseurs supportés :
+Deux fournisseurs supportes :
   - api1 : Claude (Anthropic)
   - api2 : Groq (Llama 3.3 70B)
 
@@ -10,6 +10,10 @@ Strategies :
   - Echantillonnage des lignes pour le profilage IA (200 lignes max)
   - Fusion des regles generees par lots
   - Gestion des rate limits avec pause automatique
+  - Filtre post-generation des regles aberrantes (faux positifs typiques)
+
+v2 : renforcement du prompt systeme (entites distinctes) + filtre
+     anti-regles aberrantes (ex : deviner sexe a partir du nom enqueteur)
 """
 
 from __future__ import annotations
@@ -25,10 +29,9 @@ import pandas as pd
 #  Configuration des APIs
 # ----------------------------------------------------------------------
 
-# Limites de decoupage
-MAX_COLS_PER_BATCH = 60          # Colonnes max envoyees par appel IA
-MAX_ROWS_FOR_SAMPLING = 200      # Lignes echantillonnees pour le profilage
-TPM_LIMIT_GROQ = 11000           # Limite TPM Groq free tier (marge de 1000)
+MAX_COLS_PER_BATCH = 60
+MAX_ROWS_FOR_SAMPLING = 200
+TPM_LIMIT_GROQ = 11000
 
 API_CONFIG = {
     "api1": {
@@ -61,7 +64,6 @@ def _extract_json(text: str) -> Any:
 
 
 def _estimate_tokens(text: str) -> int:
-    """Estimation grossiere : 1 token ~ 4 caracteres."""
     return len(text) // 4
 
 
@@ -71,7 +73,6 @@ def _extract_columns_from_expression(expr: str) -> list:
 
 
 def _validate_key(api: str, api_key: str):
-    """Valide le format de la cle selon le provider (interne, pas d'expo UI)."""
     if api not in API_CONFIG:
         raise ValueError("API inconnue")
     prefix = API_CONFIG[api]["key_prefix"]
@@ -86,11 +87,10 @@ def _validate_key(api: str, api_key: str):
 def _call_llm(api: str, api_key: str, model: str,
               system_prompt: str, user_prompt: str,
               max_tokens: int = 4096) -> dict:
-    """Appel unifie. Retourne {text, duration, input_tokens, output_tokens}."""
     _validate_key(api, api_key)
     t0 = time.time()
 
-    if api == "api1":  # Claude
+    if api == "api1":
         from anthropic import Anthropic
         client = Anthropic(api_key=api_key)
         resp = client.messages.create(
@@ -107,7 +107,7 @@ def _call_llm(api: str, api_key: str, model: str,
         in_tokens = resp.usage.input_tokens
         out_tokens = resp.usage.output_tokens
 
-    elif api == "api2":  # Groq
+    elif api == "api2":
         from groq import Groq
         client = Groq(api_key=api_key)
         resp = client.chat.completions.create(
@@ -134,16 +134,14 @@ def _call_with_retry(api: str, api_key: str, model: str,
                      system_prompt: str, user_prompt: str,
                      max_tokens: int = 4096,
                      max_retries: int = 2) -> dict:
-    """Appel avec retry automatique sur rate limit."""
     for attempt in range(max_retries + 1):
         try:
             return _call_llm(api, api_key, model, system_prompt, user_prompt, max_tokens)
         except Exception as e:
             err = str(e).lower()
-            # Detection rate limit (429 ou TPM)
             if any(k in err for k in ["429", "rate", "tpm", "quota", "limit"]):
                 if attempt < max_retries:
-                    wait = 60  # Pause d'une minute pour reset TPM
+                    wait = 60
                     print(f"Rate limit atteint, pause {wait}s...")
                     time.sleep(wait)
                     continue
@@ -155,7 +153,6 @@ def _call_with_retry(api: str, api_key: str, model: str,
 # ----------------------------------------------------------------------
 
 def _filter_relevant_vars(variables: list) -> list:
-    """Retire les colonnes metadata Kobo inutiles pour le QC."""
     SKIP_PREFIXES = ("__", "_")
     SKIP_PATTERNS = ("_uuid", "_submission_time", "_validation_status",
                      "_attachments", "_geolocation", "_tags", "_notes",
@@ -166,31 +163,24 @@ def _filter_relevant_vars(variables: list) -> list:
     filtered = []
     for v in variables:
         name = v["name"].lower()
-        # Skip metadata Kobo
         if any(name.startswith(p) for p in SKIP_PREFIXES):
             continue
         if any(p in name for p in SKIP_PATTERNS):
             continue
         if name in SKIP_EXACT:
             continue
-        # Skip variables vides ou constantes
         if v["fill_rate"] < 5:
             continue
         if v["uniques"] <= 1:
             continue
         filtered.append(v)
-
     return filtered
 
 
 def _split_variables_into_batches(variables: list, batch_size: int = MAX_COLS_PER_BATCH) -> list:
-    """Decoupe les variables en lots equilibres."""
     if len(variables) <= batch_size:
         return [variables]
-
-    # Trier par taux de remplissage (plus important d'abord)
     sorted_vars = sorted(variables, key=lambda v: -v["fill_rate"])
-
     batches = []
     for i in range(0, len(sorted_vars), batch_size):
         batches.append(sorted_vars[i:i + batch_size])
@@ -198,7 +188,7 @@ def _split_variables_into_batches(variables: list, batch_size: int = MAX_COLS_PE
 
 
 # ----------------------------------------------------------------------
-#  TACHE PRINCIPALE — Generation des regles QC (avec decoupage)
+#  TACHE PRINCIPALE - Generation des regles QC (avec decoupage)
 # ----------------------------------------------------------------------
 
 SYSTEM_RULES = """Tu es un expert senior en controle qualite d'enquetes (humanitaires, \
@@ -207,12 +197,36 @@ HCR/UNHCR, World Bank LSMS, Kobo/ODK, et les bonnes pratiques sectorielles.
 
 ## TA MISSION
 Generer des regles de coherence logique EXHAUSTIVES en Python pandas, executables \
-sur un DataFrame `df`. Cible : detecter le MAXIMUM d'incoherences plausibles.
+sur un DataFrame `df`. Cible : detecter le MAXIMUM d'incoherences plausibles, \
+SANS produire de faux positifs.
 
 ## REGLE D'OR
 Si l'utilisateur fournit des CRITERES D'ELIGIBILITE, tu DOIS generer une regle pandas \
 pour CHAQUE critere mentionne. Ne saute aucun critere. Si 10 criteres sont listes, \
 tu generes au minimum 10 regles correspondantes.
+
+## ENTITES DISTINCTES - REGLE CAPITALE
+Dans un fichier d'enquete, il y a TOUJOURS plusieurs entites distinctes :
+  - L'ENQUETEUR (la personne qui collecte la donnee) : colonnes comme \
+    EnuName, Enqueteur, Interviewer, Agent_Name, Surveyor, etc.
+  - Le REPONDANT ou MENAGE (la personne interviewee) : age, sexe, education, \
+    revenu, satisfaction, etc.
+  - Eventuellement : APPELANT/RECEVEUR, EMPLOYE/CLIENT, MERE/ENFANT, etc.
+
+**INTERDICTIONS ABSOLUES** :
+- Tu ne dois JAMAIS creer une regle qui compare un attribut de l'ENQUETEUR \
+  (nom, ID, code) avec un attribut du REPONDANT (sexe, age, revenu, etc.).
+  Ce sont deux personnes differentes. Une enquetrice femme peut interviewer un \
+  homme, c'est NORMAL et MASSIVEMENT le cas reel.
+- Tu ne dois JAMAIS deviner le sexe ou l'origine d'une personne a partir de son \
+  nom (ex : "Ould", "Mint", "Ben", "Mme", "M.") - c'est biaise et peu fiable.
+- Tu ne dois JAMAIS comparer le nom du repondant avec son sexe / son age.
+
+Si tu identifies une colonne comme etant le NOM D'ENQUETEUR, tu peux SEULEMENT :
+- L'utiliser pour identifier qui a saisi la ligne (sortie informationnelle)
+- Detecter des anomalies SUR son travail (ex : meme enqueteur >30 questionnaires/jour, \
+  ses durees toutes identiques, doublons dans ses GPS)
+Mais JAMAIS de croisement avec les attributs personnels du repondant.
 
 ## CHAQUE REGLE DOIT AVOIR
 1. Description courte en francais (precise, pas vague)
@@ -221,14 +235,15 @@ tu generes au minimum 10 regles correspondantes.
 
 ## TYPES D'INCOHERENCES A CHERCHER SYSTEMATIQUEMENT
 A. **Valeurs hors plages** : age > 120, age < 18 si critere, NPS > 10, scores > max
-B. **Croisements logiques** : NPS=10 mais "ne recommanderait pas", satisfaction=1 mais NPS=10
+B. **Croisements logiques INTRA-REPONDANT** : NPS=10 mais "ne recommanderait pas", \
+   satisfaction=1 mais NPS=10
 C. **Dates impossibles** : date dans le futur, fin < debut, naissance > aujourd'hui
 D. **Mathematiques impossibles** : anciennete > age, nb_enfants > nb_personnes
 E. **Doublons** : id_client en double via df.duplicated()
 F. **Durees anormales** : entretien < 10 min ou > 90 min
 G. **Logique metier** : compte premium avec revenu < seuil, mineur avec compte seul
-H. **Coherence categorielle** : genre "Femme" avec nom "Ould" (mauritanien masculin)
-I. **Skip patterns** : si reponse X='Non', alors Y doit etre vide
+H. **Skip patterns** : si reponse X='Non', alors Y doit etre vide ; si X='Oui', \
+   alors Y doit etre rempli
 
 ## EXEMPLES D'EXPRESSIONS PANDAS CORRECTES
 - Age hors plage : `(df['age'] < 18) | (df['age'] > 120)`
@@ -238,12 +253,17 @@ I. **Skip patterns** : si reponse X='Non', alors Y doit etre vide
 - Date dans le futur : `pd.to_datetime(df['date_entretien'], errors='coerce') > pd.Timestamp.now()`
 - Fin avant debut : `pd.to_datetime(df['heure_fin'], errors='coerce') < pd.to_datetime(df['heure_debut'], errors='coerce')`
 - Compte premium revenu faible : `(df['type_compte'] == 'Compte premium') & (df['revenu_mensuel_MRU'] < 100000)`
-- Coherence genre/nom : `(df['genre'] == 'Femme') & df['nom_client'].str.contains('Ould', na=False)`
+- Skip pattern : `(df['a_des_enfants'] == 'Non') & df['nombre_enfants'].notna() & (df['nombre_enfants'] > 0)`
+
+## EXEMPLES DE REGLES A NE JAMAIS GENERER (anti-patterns)
+- `df['EnuName'].str.contains('Fatima') & (df['sexe'] == 'M')` => INTERDIT (croise enqueteur/repondant)
+- `df['nom'].str.contains('Ould') & (df['sexe'] == 'F')` => INTERDIT (devine sexe via nom)
+- `df['Enqueteur'] & df['age_repondant']` => INTERDIT (croise enqueteur/age repondant)
 
 ## IMPORTANT - REGLES STRICTES
 1. Utilise UNIQUEMENT les noms de colonnes EXACTS fournis (sensible a la casse)
 2. JAMAIS de regle triviale (vide / non vide simple) - SAUF si la colonne est requise
-3. Privilegie les CROISEMENTS entre variables (pas juste une colonne isolee)
+3. Privilegie les CROISEMENTS entre variables DU MEME REPONDANT (pas enqueteur x repondant)
 4. Pas d'import - juste `df` et `pd` (pandas)
 5. Genere ENTRE 10 ET 20 regles (objectif : couvrir tous les criteres)
 6. Reponds UNIQUEMENT en JSON valide, sans markdown autour."""
@@ -257,7 +277,8 @@ def _build_user_prompt(variables_batch: list,
                         survey_eligibility: str = "",
                         form_content: str = "",
                         sample_rows: list = None,
-                        batch_info: str = "") -> str:
+                        batch_info: str = "",
+                        enqueteur_col_hint: str = "") -> str:
     """Construit le prompt utilisateur avec le contexte enrichi."""
     context_parts = []
 
@@ -280,12 +301,20 @@ def _build_user_prompt(variables_batch: list,
             f"Utilise les contraintes et skip patterns de ce formulaire pour generer les regles.\n"
             f"{form_content[:3000]}"
         )
+    if enqueteur_col_hint:
+        context_parts.append(
+            f"### ATTENTION - Colonne identifiee comme NOM ENQUETEUR\n"
+            f"La colonne `{enqueteur_col_hint}` contient le nom de l'enqueteur (la personne qui\n"
+            f"COLLECTE la donnee, PAS le repondant interviewe).\n"
+            f"INTERDICTION : tu ne dois generer AUCUNE regle qui compare `{enqueteur_col_hint}`\n"
+            f"avec un attribut personnel du repondant (sexe, age, revenu, education, etc.).\n"
+            f"Une enquetrice peut tres bien interviewer un homme, c'est NORMAL."
+        )
     if batch_info:
         context_parts.append(batch_info)
 
     context = "\n\n".join(context_parts) if context_parts else "Enquete generique sans contexte fourni."
 
-    # Variables compactees pour economiser des tokens
     vars_compact = []
     for v in variables_batch:
         entry = {
@@ -317,8 +346,9 @@ Genere ENTRE 10 ET 20 regles de coherence logique TRES PRECISES.
 **Etapes obligatoires** :
 1. Si des CRITERES D'ELIGIBILITE sont listes ci-dessus, transforme CHACUN en une regle pandas.
    Exemple : critere "Age minimum 18 ans" devient `df['age'] < 18`.
-2. Ajoute des regles supplementaires pour les types d'incoherences A a I du systeme.
-3. Croise les variables entre elles autant que possible.
+2. Ajoute des regles supplementaires pour les types d'incoherences A a H du systeme.
+3. Croise les variables entre elles autant que possible, MAIS UNIQUEMENT au sein
+   d'une meme entite (le repondant). JAMAIS enqueteur x repondant.
 4. Verifie que CHAQUE expression utilise des noms de colonnes EXACTS de la liste fournie.
 
 **Format de reponse strict (JSON uniquement, sans markdown)** :
@@ -339,6 +369,78 @@ Genere ENTRE 10 ET 20 regles de coherence logique TRES PRECISES.
     return prompt
 
 
+# ----------------------------------------------------------------------
+#  Filtre post-generation : anti-regles aberrantes
+# ----------------------------------------------------------------------
+
+def _is_bad_rule(rule: dict, mp: dict) -> tuple:
+    """
+    Detecte les regles aberrantes (faux positifs typiques).
+    Conservateur : ne filtre que les cas clairement problematiques.
+    Renvoie (is_bad, raison_de_filtrage).
+    """
+    expr = rule.get("expression", "")
+    expr_low = expr.lower()
+    desc_low = rule.get("description", "").lower()
+    enq_col = (mp.get("enqueteur") or "") if mp else ""
+    cols_in_rule = _extract_columns_from_expression(expr)
+
+    # 1. Croisement enqueteur x sexe/genre du repondant (le cas observe)
+    sex_keywords = ("sexe", "genre", "gender", " sex")
+    if enq_col and enq_col in cols_in_rule:
+        if any(k in expr_low for k in sex_keywords):
+            return True, f"Croise nom enqueteur ({enq_col}) avec sexe/genre du repondant"
+        if any(k in desc_low for k in ("nom", "name", "prenom")) and \
+           any(k in desc_low for k in sex_keywords):
+            return True, "Description suggere croisement nom/sexe"
+
+    # 2. Pattern explicite : devine le sexe via particules de nom
+    name_particles = ("ould", "mint", "bint", " ben ", " bin ", "mme.", "mr.", "m.")
+    if "str.contains" in expr_low:
+        if any(p in expr_low for p in name_particles):
+            if any(k in expr_low for k in sex_keywords):
+                return True, "Devine sexe via particule de nom (Ould/Mint/Ben...)"
+
+    # 3. Croisement enqueteur x attribut personnel du repondant
+    if enq_col and enq_col in cols_in_rule:
+        personal_attrs = ("age", "education", "_edu", "marital", "marit_",
+                          "revenu", "income", "naissance", "birth",
+                          "scolar", "diplome")
+        for col in cols_in_rule:
+            if col == enq_col:
+                continue
+            col_low = col.lower()
+            if any(a in col_low for a in personal_attrs):
+                return True, f"Croise enqueteur avec attribut perso repondant ({col})"
+
+    return False, None
+
+
+def _validate_rules(rules: list, mp: dict, progress_callback=None) -> tuple:
+    """
+    Filtre les regles aberrantes. Renvoie (regles_valides, regles_filtrees).
+    """
+    valid = []
+    filtered = []
+    for rule in rules:
+        is_bad, reason = _is_bad_rule(rule, mp)
+        if is_bad:
+            rule_filtered = dict(rule)
+            rule_filtered["_filtered_reason"] = reason
+            filtered.append(rule_filtered)
+            if progress_callback:
+                progress_callback(
+                    f"Regle filtree : {rule.get('description', '?')[:60]} -> {reason}"
+                )
+        else:
+            valid.append(rule)
+    return valid, filtered
+
+
+# ----------------------------------------------------------------------
+#  Generation des regles (orchestrateur)
+# ----------------------------------------------------------------------
+
 def generate_rules(api: str,
                    api_key: str,
                    profile: dict,
@@ -350,23 +452,21 @@ def generate_rules(api: str,
                    survey_eligibility: str = "",
                    form_content: str = "",
                    df: pd.DataFrame = None,
-                   progress_callback=None) -> tuple:
+                   progress_callback=None,
+                   mp: dict = None) -> tuple:
     """
     Genere les regles QC avec decoupage automatique si necessaire.
 
     Args:
         api : 'api1' (Claude) ou 'api2' (Groq)
         api_key : cle d'acces
-        profile : profil du dataset (sortie de profiler)
-        var_labels : libelles des variables
-        value_labels : libelles des modalites
-        survey_type : type d'enquete (optionnel mais recommande)
-        survey_description : description et objectifs (optionnel mais recommande)
-        survey_population : population cible (optionnel)
-        survey_eligibility : criteres d'eligibilite (optionnel)
-        form_content : contenu du questionnaire / form Kobo (optionnel)
-        df : DataFrame pour echantillonnage (optionnel)
-        progress_callback : fonction de feedback de progression
+        profile : profil du dataset
+        var_labels, value_labels : libelles
+        survey_* : contexte enquete
+        form_content : questionnaire Kobo
+        df : DataFrame pour echantillonnage
+        progress_callback : feedback de progression
+        mp : mapping des colonnes-cles (pour le hint enqueteur + filtre)
 
     Retourne (regles_fusionnees, commentaire_global, metriques).
     """
@@ -384,6 +484,9 @@ def generate_rules(api: str,
             lines.append(f"  {col} : {mod_str}")
         dict_extract = "\n".join(lines)
 
+    # Hint sur la colonne enqueteur
+    enqueteur_col_hint = (mp or {}).get("enqueteur") or ""
+
     # 3. Echantillonner des lignes pour donner du contexte
     sample_rows = None
     if df is not None and len(df) > 0:
@@ -391,7 +494,7 @@ def generate_rules(api: str,
         sample_df = df.sample(n=sample_size, random_state=42) if len(df) > sample_size else df
         sample_rows = sample_df.head(5).to_dict(orient="records")
 
-    # 4. Decouper en lots si beaucoup de colonnes
+    # 4. Decouper en lots
     batches = _split_variables_into_batches(all_vars)
     n_batches = len(batches)
 
@@ -420,12 +523,11 @@ def generate_rules(api: str,
             form_content=form_content,
             sample_rows=sample_rows if idx == 1 else None,
             batch_info=batch_info,
+            enqueteur_col_hint=enqueteur_col_hint,
         )
 
-        # Verification taille (estimation) - reduction progressive si trop gros
         estimated = _estimate_tokens(SYSTEM_RULES + user_prompt)
         if api == "api2" and estimated > TPM_LIMIT_GROQ:
-            # Etape 1 : retirer l'echantillon
             user_prompt = _build_user_prompt(
                 batch, survey_type, survey_description, dict_extract,
                 survey_population=survey_population,
@@ -433,11 +535,11 @@ def generate_rules(api: str,
                 form_content=form_content,
                 sample_rows=None,
                 batch_info=batch_info,
+                enqueteur_col_hint=enqueteur_col_hint,
             )
             estimated = _estimate_tokens(SYSTEM_RULES + user_prompt)
 
         if api == "api2" and estimated > TPM_LIMIT_GROQ:
-            # Etape 2 : retirer le formulaire (trop volumineux)
             user_prompt = _build_user_prompt(
                 batch, survey_type, survey_description, dict_extract,
                 survey_population=survey_population,
@@ -445,6 +547,7 @@ def generate_rules(api: str,
                 form_content="",
                 sample_rows=None,
                 batch_info=batch_info,
+                enqueteur_col_hint=enqueteur_col_hint,
             )
 
         try:
@@ -462,7 +565,6 @@ def generate_rules(api: str,
             total_out_tokens += result["output_tokens"]
             total_duration += result["duration"]
 
-            # Pause entre les lots pour eviter le rate limit
             if api == "api2" and idx < n_batches:
                 time.sleep(2)
 
@@ -471,7 +573,7 @@ def generate_rules(api: str,
                 progress_callback(f"Lot {idx} echoue : {e}")
             continue
 
-    # 6. Dedupliquer les regles (memes descriptions)
+    # 6. Dedupliquer les regles
     seen_descs = set()
     unique_rules = []
     for r in all_rules:
@@ -480,6 +582,14 @@ def generate_rules(api: str,
             seen_descs.add(desc)
             unique_rules.append(r)
 
+    # 7. FILTRE POST-GENERATION : retirer les regles aberrantes
+    valid_rules, filtered_rules = _validate_rules(unique_rules, mp, progress_callback)
+    if filtered_rules and progress_callback:
+        progress_callback(
+            f"{len(filtered_rules)} regle(s) filtree(s) automatiquement "
+            f"(faux positifs evites)"
+        )
+
     global_comment = " ".join(all_comments)[:600] if all_comments else ""
 
     metrics = {
@@ -487,12 +597,18 @@ def generate_rules(api: str,
         "duration": round(total_duration, 2),
         "input_tokens": total_in_tokens,
         "output_tokens": total_out_tokens,
-        "n_rules": len(unique_rules),
+        "n_rules": len(valid_rules),
+        "n_rules_filtered": len(filtered_rules),
         "n_batches": n_batches,
         "n_vars_analysed": len(all_vars),
+        "filtered_rules": [
+            {"description": r.get("description", ""),
+             "reason": r.get("_filtered_reason", "")}
+            for r in filtered_rules
+        ],
     }
 
-    return unique_rules, global_comment, metrics
+    return valid_rules, global_comment, metrics
 
 
 # ----------------------------------------------------------------------
@@ -500,7 +616,7 @@ def generate_rules(api: str,
 # ----------------------------------------------------------------------
 
 def run_rules(df: pd.DataFrame, rules: list, mp: dict) -> dict:
-    """Execute les regles sur le DataFrame complet (pas d'echantillon ici)."""
+    """Execute les regles sur le DataFrame complet."""
     rows_out = []
     enqueteur_col = mp.get("enqueteur")
     cas_par_regle = {}
@@ -516,7 +632,6 @@ def run_rules(df: pd.DataFrame, rules: list, mp: dict) -> dict:
             n_cas = len(problem_idx)
             cas_par_regle[rule_idx] = n_cas
 
-            # Gravite basee sur la frequence
             if n_cas > 10:
                 severite = "high"
             elif n_cas > 3:
@@ -552,7 +667,6 @@ def run_rules(df: pd.DataFrame, rules: list, mp: dict) -> dict:
             print(f"Regle ignoree ({rule.get('description', '?')}) : {e}")
             continue
 
-    # Tri par gravite (high > med > low) puis par enqueteur
     order = {"high": 0, "med": 1, "low": 2}
     rows_out.sort(key=lambda r: (order.get(r["_severite"], 9), r["Enqueteur"]))
 
@@ -577,7 +691,6 @@ def run_rules(df: pd.DataFrame, rules: list, mp: dict) -> dict:
 # ----------------------------------------------------------------------
 
 def test_api_key(api: str, api_key: str) -> tuple:
-    """Verifie qu'une cle API est valide."""
     try:
         _validate_key(api, api_key)
         t0 = time.time()
@@ -589,7 +702,6 @@ def test_api_key(api: str, api_key: str) -> tuple:
     except ValueError as e:
         return False, f"KO - {e}"
     except Exception as e:
-        # Nettoie le message d'erreur de toute mention provider
         err = str(e)
         for term in ["Anthropic", "anthropic", "Claude", "claude",
                      "Groq", "groq", "sk-ant", "gsk_"]:

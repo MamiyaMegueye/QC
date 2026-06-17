@@ -155,7 +155,7 @@ export default function Step1Import() {
                 {configured && (
                   <span
                     className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-green-400"
-                    title="Clé chargée depuis .env"
+                    title="Clé chargée"
                   />
                 )}
               </button>
@@ -163,6 +163,7 @@ export default function Step1Import() {
           })}
         </div>
 
+        {/* Statut .env (uniquement le badge vert si OK, rien sinon) */}
         {currentConfigured && (
           <div className="bg-green-50 border border-green-200 rounded-xl p-3 mb-3 flex items-center gap-2">
             <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
@@ -172,24 +173,7 @@ export default function Step1Import() {
           </div>
         )}
 
-        {!currentConfigured && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-3 flex items-start gap-2">
-            <XCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-            <div className="text-sm text-amber-800">
-              <p className="font-medium m-0">
-                Aucune clé {store.selectedApi === "api1" ? "API 1" : "API 2"} trouvée dans le fichier .env
-              </p>
-              <p className="text-xs mt-1 m-0">
-                Saisissez manuellement la clé ci-dessous, ou ajoutez{" "}
-                <code className="bg-amber-100 px-1 rounded font-mono">
-                  {store.selectedApi === "api1" ? "ANTHROPIC_API_KEY" : "GROQ_API_KEY"}
-                </code>{" "}
-                dans backend/.env puis redémarrez le backend.
-              </p>
-            </div>
-          </div>
-        )}
-
+        {/* Champ saisie clé (toujours visible) */}
         <div className="grid grid-cols-1 md:grid-cols-[1fr,auto] gap-3 items-end">
           <div>
             <label className="label-text">

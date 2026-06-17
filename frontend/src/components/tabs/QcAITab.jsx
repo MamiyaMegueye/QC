@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { useStore } from "../../store/useStore"
 import { api } from "../../api/client"
 import MetricCard from "../cards/MetricCard"
@@ -10,6 +10,9 @@ import {
   Sparkles,
   LayoutGrid,
   Table as TableIcon,
+  Power,
+  PowerOff,
+  AlertTriangle,
 } from "lucide-react"
 
 const SEV_LABEL = { high: "Gravité haute", med: "Gravité moyenne", low: "Gravité faible" }
@@ -29,19 +32,22 @@ export default function QcAITab() {
   const [viewMode, setViewMode] = useState("cards")
   const [rulesExpanded, setRulesExpanded] = useState(false)
 
+  // Indices des règles désactivées par l'utilisateur (Set)
+  const [disabledRules, setDisabledRules] = useState(() => new Set())
+
   const apiLabel = store.selectedApi === "api1" ? "API 1" : "API 2"
   const currentKey =
     store.selectedApi === "api1" ? store.apiKey1 : store.apiKey2
   const currentConfigured =
     store.selectedApi === "api1" ? store.api1Configured : store.api2Configured
 
-  // L'utilisateur peut generer si : clé saisie OU .env configuré
   const canGenerate = !!currentKey || currentConfigured
 
   const handleGenerate = async () => {
     if (!store.sessionId) return
     store.setIsGenerating(true)
     store.setApiError(null)
+    setDisabledRules(new Set()) // reset les règles désactivées
     try {
       const data = await api.generateRules({
         session_id: store.sessionId,
@@ -64,6 +70,34 @@ export default function QcAITab() {
   const handleExport = () => {
     window.open(api.getExportUrl(store.sessionId), "_blank")
   }
+
+  const toggleRule = (ruleIdx) => {
+    setDisabledRules((prev) => {
+      const next = new Set(prev)
+      if (next.has(ruleIdx)) next.delete(ruleIdx)
+      else next.add(ruleIdx)
+      return next
+    })
+  }
+
+  const enableAllRules = () => setDisabledRules(new Set())
+  const disableAllRules = () => {
+    if (!store.aiRules) return
+    setDisabledRules(new Set(store.aiRules.map((_, i) => i)))
+  }
+
+  // ─── Cas filtrés (excluant les règles désactivées) ─────────────────────
+  const filteredCases = useMemo(() => {
+    if (!store.aiResult?.lignes) return []
+    if (disabledRules.size === 0) return store.aiResult.lignes
+    return store.aiResult.lignes.filter(
+      (cas) => !disabledRules.has(cas._rule_idx)
+    )
+  }, [store.aiResult, disabledRules])
+
+  const nbCasActifs = filteredCases.length
+  const nbCasTotal = store.aiResult?.lignes?.length || 0
+  const nbCasHidden = nbCasTotal - nbCasActifs
 
   return (
     <div>
@@ -132,13 +166,40 @@ export default function QcAITab() {
             </div>
           )}
 
+          {/* Alerte sur règles filtrées automatiquement par le backend */}
+          {store.aiMetrics?.n_rules_filtered > 0 && (
+            <div className="bg-amber-50 border-l-4 border-amber-500 rounded-r-xl p-3 px-4 mb-4 text-sm">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold text-amber-900 m-0">
+                    {store.aiMetrics.n_rules_filtered} règle(s) suspecte(s) écartée(s) automatiquement
+                  </p>
+                  <p className="text-amber-800 text-xs mt-1 m-0">
+                    Le système a détecté et bloqué des règles aberrantes (ex : croisement
+                    enquêteur ↔ répondant, déduction du sexe à partir du nom).
+                  </p>
+                  {store.aiMetrics.filtered_rules?.length > 0 && (
+                    <ul className="text-amber-800 text-xs mt-2 m-0 pl-4 list-disc">
+                      {store.aiMetrics.filtered_rules.slice(0, 3).map((r, i) => (
+                        <li key={i}>
+                          <em>{r.description}</em> — {r.reason}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {store.aiComment && (
             <div className="bg-blue-50 border-l-4 border-blue-500 rounded-r-xl p-3 px-4 mb-4 text-sm text-navy">
               {store.aiComment}
             </div>
           )}
 
-          {/* Liste des règles */}
+          {/* Liste des règles (avec toggle activer/désactiver) */}
           <div className="mb-4">
             <button
               onClick={() => setRulesExpanded(!rulesExpanded)}
@@ -146,6 +207,11 @@ export default function QcAITab() {
             >
               <span>
                 Voir les {store.aiRules.length} règles générées par l'IA
+                {disabledRules.size > 0 && (
+                  <span className="ml-2 text-amber-700 font-semibold">
+                    ({disabledRules.size} désactivée{disabledRules.size > 1 ? "s" : ""})
+                  </span>
+                )}
               </span>
               {rulesExpanded ? (
                 <ChevronUp className="w-4 h-4" />
@@ -153,24 +219,75 @@ export default function QcAITab() {
                 <ChevronDown className="w-4 h-4" />
               )}
             </button>
+
             {rulesExpanded && (
               <div className="mt-2 space-y-2">
+                {/* Actions globales */}
+                <div className="flex gap-2 text-xs">
+                  <button
+                    onClick={enableAllRules}
+                    className="text-blue-700 hover:underline"
+                    disabled={disabledRules.size === 0}
+                  >
+                    Tout activer
+                  </button>
+                  <span className="text-gray-400">|</span>
+                  <button
+                    onClick={disableAllRules}
+                    className="text-red-700 hover:underline"
+                    disabled={disabledRules.size === store.aiRules.length}
+                  >
+                    Tout désactiver
+                  </button>
+                </div>
+
                 {store.aiRules.map((r, i) => {
                   const nCas = store.aiResult.cas_par_regle?.[i] || 0
+                  const isDisabled = disabledRules.has(i)
                   return (
                     <div
                       key={i}
-                      className="bg-white border-l-4 border-yellow-500 rounded-r-xl p-3 px-4 shadow-sm"
+                      className={`bg-white border-l-4 rounded-r-xl p-3 px-4 shadow-sm transition-all ${
+                        isDisabled
+                          ? "border-gray-300 opacity-50"
+                          : "border-yellow-500"
+                      }`}
                     >
-                      <p className="m-0 text-sm">
-                        <span className="font-bold text-navy">
-                          Règle {i + 1}
-                        </span>{" "}
-                        — {r.description}
-                      </p>
-                      <p className="text-gray-500 text-xs mt-1 m-0">
-                        {nCas} cas détectés
-                      </p>
+                      <div className="flex justify-between items-start gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className={`m-0 text-sm ${isDisabled ? "line-through text-gray-500" : ""}`}>
+                            <span className="font-bold text-navy">
+                              Règle {i + 1}
+                            </span>{" "}
+                            — {r.description}
+                          </p>
+                          <p className="text-gray-500 text-xs mt-1 m-0">
+                            {nCas} cas détecté{nCas > 1 ? "s" : ""}
+                            {isDisabled && " — masqués"}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => toggleRule(i)}
+                          className={`flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                            isDisabled
+                              ? "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                              : "bg-green-100 text-green-800 hover:bg-green-200"
+                          }`}
+                          title={isDisabled ? "Réactiver cette règle" : "Désactiver cette règle"}
+                        >
+                          {isDisabled ? (
+                            <>
+                              <PowerOff className="w-3.5 h-3.5" />
+                              Désactivée
+                            </>
+                          ) : (
+                            <>
+                              <Power className="w-3.5 h-3.5" />
+                              Activée
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
                   )
                 })}
@@ -179,12 +296,19 @@ export default function QcAITab() {
           </div>
 
           <h3 className="font-sora font-bold text-navy text-xl mb-3">
-            {store.aiResult.n_cas} cas détectés
+            {nbCasActifs} cas détectés
+            {nbCasHidden > 0 && (
+              <span className="text-sm text-gray-500 font-normal ml-2">
+                ({nbCasHidden} masqué{nbCasHidden > 1 ? "s" : ""} par règles désactivées)
+              </span>
+            )}
           </h3>
 
-          {store.aiResult.lignes.length === 0 ? (
+          {filteredCases.length === 0 ? (
             <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-green-800 text-center">
-              Aucune incohérence détectée. Bravo !
+              {nbCasTotal === 0
+                ? "Aucune incohérence détectée. Bravo !"
+                : "Tous les cas ont été masqués par les règles désactivées."}
             </div>
           ) : (
             <>
@@ -224,7 +348,7 @@ export default function QcAITab() {
               {/* Vue Cartes */}
               {viewMode === "cards" && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {store.aiResult.lignes.map((cas, i) => (
+                  {filteredCases.map((cas, i) => (
                     <div
                       key={i}
                       className={`bg-white border border-gray-200 border-l-4 ${
@@ -315,7 +439,7 @@ export default function QcAITab() {
                       </tr>
                     </thead>
                     <tbody>
-                      {store.aiResult.lignes.map((cas, i) => (
+                      {filteredCases.map((cas, i) => (
                         <tr key={i} className="border-b border-gray-100">
                           <td className="px-3 py-2 whitespace-nowrap">
                             {i + 1}
