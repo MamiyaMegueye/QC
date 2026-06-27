@@ -1,12 +1,12 @@
 """
 qc_basic.py — Contrôle qualité BASIQUE générique (NIVEAU 2, sans IA).
 
-Tests universels applicables à tout fichier d'enquête :
+Tests universels applicables à tout fichier d'observations :
   - doublons (lignes entières + identifiants)
   - valeurs manquantes (par variable + champs critiques)
   - outliers (méthode IQR sur variables numériques)
-  - durées de questionnaire (si start/end détectés)
-  - intervalle entre questionnaires (par enquêteur)
+  - durées par observation (si start/end détectés)
+  - intervalle entre observations (par enquêteur)
   - GPS manquant
   - plages de valeurs (cohérence des numériques)
   - cohérence inter-colonnes simple (constantes par zone, etc.)
@@ -18,8 +18,10 @@ où chaque ligne porte _index, _enqueteur, _probleme.
 Le mapping des colonnes-clés est détecté par mots-clés (auto_map),
 mais peut être surchargé par l'utilisateur ou par l'agent IA.
 
-v2 : détection enquêteur élargie pour reconnaître les conventions courantes
-  (EnuName, EnumID, IntName, Interviewer, Surveyor, FieldWorker, etc.)
+v3 (recommandations SISTA) :
+  - Terminologie : "questionnaire" remplacé par "observation" partout
+    (le terme questionnaire est réservé au fichier formulaire de collecte)
+  - La clé `questionnaires` dans global_stats devient `observations`
 """
 
 import pandas as pd
@@ -59,9 +61,7 @@ def auto_map(columns):
             r"interviewer", r"enumerator", r"surveyor", r"investigator",
             r"fieldworker", r"field[_-]worker", r"data[_-]collector",
             # Abréviations très courantes (Enu / Enum / Int) avec ou sans suffixe
-            #   matche : Enu, EnuName, EnuID, EnumName, EnumID, EnuNom, EnuCode
             r"\benu[mn]?(?:[_-]?(?:name|nom|id|code))?\b",
-            #   matche : IntName, Interv_id, Interv_name, Int_id
             r"\bint(?:erv)?[_-]?(?:name|nom|id|code)\b",
             # Composées
             r"agent[_-]?(?:name|nom|id|code)",
@@ -72,7 +72,10 @@ def auto_map(columns):
         "id": find([
             r"id.?progres", r"^id$", r"identifiant",
             r"m[ée]nage.*id", r"hh.?id", r"uuid", r"num.*quest",
-            r"household[_-]?id", r"questionnaire[_-]?id",
+            r"household[_-]?id", r"observation[_-]?id", r"obs[_-]?id",
+            # On garde "questionnaire_id" pour la retro-compatibilite avec
+            # les fichiers existants qui utilisent encore cette convention
+            r"questionnaire[_-]?id",
         ]),
         "lat": find([
             r"latitude", r"^lat$", r"_gps.*lat",
@@ -165,7 +168,7 @@ def test_id_duplique(df, mp, profile, params):
 
 
 def test_valeurs_manquantes(df, mp, profile, params):
-    seuil = params.get("missing_seuil", 50)  # % de remplissage en dessous duquel on alerte
+    seuil = params.get("missing_seuil", 50)
     lignes = []
     for v in profile["variables"]:
         if v["type"] == "vide" or v["fill_rate"] >= seuil:
@@ -230,10 +233,10 @@ def test_duree_courte(df, mp, profile, params):
             lignes.append({"_index": int(idx) + 1, "Enquêteur": _enq(row, mp),
                            "Durée (min)": int(dur), "_enqueteur": _enq(row, mp),
                            "_probleme": f"Durée {int(dur)} min < {seuil} min"})
-    return _result("duree_courte", f"Durée questionnaire < {seuil} min", "high",
-                   f"Un questionnaire trop court (< {seuil} min) est suspect : questions sautées ou fabrication.",
+    return _result("duree_courte", f"Durée d'observation < {seuil} min", "high",
+                   f"Une observation trop courte (< {seuil} min) est suspecte : questions sautées ou fabrication.",
                    "Enquêteur pressé ou données fabriquées.",
-                   f"Callback systématique pour tout questionnaire < {seuil} min.",
+                   f"Callback systématique pour toute observation < {seuil} min.",
                    lignes, ["_index", "Enquêteur", "Durée (min)", "⚠️ Problème"])
 
 
@@ -257,8 +260,8 @@ def test_intervalle_starts(df, mp, profile, params):
                                    "Écart (min)": int(ecart), "_enqueteur": str(enq),
                                    "_probleme": f"Écart {int(ecart)} min < {seuil} min"})
             prev = row["_dt"]
-    return _result("intervalle_starts", f"Intervalle entre starts < {seuil} min", "med",
-                   f"Un questionnaire démarré < {seuil} min après le précédent laisse peu de temps.",
+    return _result("intervalle_starts", f"Intervalle entre observations < {seuil} min", "med",
+                   f"Une observation démarrée < {seuil} min après la précédente laisse peu de temps.",
                    "Remplissage en parallèle ou fabrication.",
                    "Croiser avec la durée. Callback si les deux sont courts.",
                    lignes, ["_index", "Enquêteur", "Écart (min)", "⚠️ Problème"])
@@ -276,7 +279,7 @@ def test_gps_manquant(df, mp, profile, params):
                            "_enqueteur": _enq(row, mp),
                            "_probleme": "GPS manquant — position non enregistrée"})
     return _result("gps_manquant", "Coordonnées GPS manquantes", "med",
-                   "Sans GPS, impossible de vérifier que l'entretien a eu lieu au bon endroit.",
+                   "Sans GPS, impossible de vérifier que l'observation a eu lieu au bon endroit.",
                    "GPS désactivé, refus de localisation, ou remplissage hors terrain.",
                    "Rendre le GPS obligatoire. Vérifier la présence terrain.",
                    lignes, ["_index", "Enquêteur", "⚠️ Problème"])
@@ -351,7 +354,11 @@ def build_enqueteur_summary(results, mp):
 def global_stats(profile, results):
     total = sum(r["n_cas"] for r in results)
     return {
-        "questionnaires": profile["summary"]["n_rows"],
+        # Recommandation SISTA : "questionnaires" -> "observations"
+        # On garde l'ancienne cle en alias pour la retro-compatibilite si jamais
+        # un consommateur de l'API la lit encore.
+        "observations": profile["summary"]["n_rows"],
+        "questionnaires": profile["summary"]["n_rows"],  # alias deprecie
         "incoherences": total,
         "tests": len(results),
         "tests_alertes": len([r for r in results if r["severite"] != "ok"]),

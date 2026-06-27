@@ -110,28 +110,190 @@ MAX_UNIVARIATE = 15
 MAX_BIVARIATE = 8
 
 EXCLUDED_TYPES = {"identifiant", "date", "vide"}
+
+# Patterns de noms de variables a EXCLURE du rapport analytique destine au commanditaire.
+# Ces variables sont des metadonnees de collecte / pilotage SISTA et n'apportent aucune
+# valeur metier pour le rapport client.
 EXCLUDED_NAME_PATTERNS = [
-    "_uuid", "_submission_time", "_validation_status", "_attachments",
-    "_geolocation", "_tags", "_notes", "__version__", "formhub/",
-    "_xform_id", "meta/", "start", "end", "today", "deviceid",
-    "subscriberid", "simserial", "phonenumber", "username", "audit",
-    "gps", "latitude", "longitude", "altitude",
+    # --- Metadonnees Kobo / ODK / XLSForm ---
+    "_uuid", "_submission_time", "_submitted_by", "_validation_status",
+    "_attachments", "_geolocation", "_tags", "_notes", "_index", "_parent_index",
+    "_status", "_xform_id", "__version__", "formhub/", "meta/",
+    "deviceid", "subscriberid", "simserial", "phonenumber", "username", "audit",
+    "imei", "serial_number", "device_id",
+
+    # --- Variables temporelles / pilotage de collecte ---
+    "start", "end", "today", "starttime", "endtime",
+    "duree_enquete", "duree_collecte", "duration", "duree_obs", "duree_obser",
+    "date_collecte", "date_saisie", "heure_debut", "heure_fin",
+
+    # --- Variables d'enqueteur / agent de collecte ---
+    "enqueteur", "enquêteur", "enumerator", "interviewer", "agent_",
+    "_agent", "surveyor", "investigator", "releveur", "operateur", "operator",
+    "collecteur", "collector", "fieldworker", "field_worker", "data_collector",
+    "nom_enq", "id_enq", "code_enq", "enum_name", "enum_id", "enum_code",
+    "superviseur", "supervisor", "controleur", "controller",
+
+    # --- Coordonnees GPS ---
+    "gps", "latitude", "longitude", "altitude", "geopoint", "geoshape",
+    "_lat", "_lon", "_lng", "_coord", "coordonnees",
+
+    # --- Identifiants techniques internes ---
+    "uuid", "guid", "session_id", "num_quest", "numero_quest",
+    "num_obser", "numero_obs", "code_quest", "ref_quest",
+
+    # --- Champs libres ou contacts (non analysables statistiquement) ---
+    "commentaire", "comment", "comments", "remarque", "remark", "note",
+    "observation_libre", "autre_precis", "autres_precise", "specifier",
+    "telephone", "_phone", "tel_", "numero_tel", "mobile",
+    "email", "courriel", "adresse_email",
+    "nom_complet", "prenom", "nom_famille", "first_name", "last_name",
+    "nom_repondant", "nom_chef",
 ]
 
 
-def _is_analyzable(var: dict) -> bool:
-    name = var["name"].lower()
+def _is_analyzable(var: dict, mp: dict | None = None) -> bool:
+    """Determine si une variable doit etre analysee dans le rapport client.
+
+    Args:
+        var : dict de profil de variable
+        mp  : mapping des colonnes-cles {id, enqueteur, start, end, lat, lon}
+              -> ces colonnes sont EXCLUES car techniques / de pilotage
+    """
+    name = var["name"]
+    name_lower = name.lower()
+
+    # ---- Exclusion DYNAMIQUE des colonnes-cles declarees par l'utilisateur ----
+    # Le rapport est destine au COMMANDITAIRE de l'enquete (entreprise / ONG),
+    # pas au bureau d'etudes SISTA. Les colonnes techniques de pilotage interne
+    # (identifiant, enqueteur, horodatages, GPS) n'ont aucun interet metier.
+    if mp:
+        technical_cols = {
+            mp.get(k) for k in ("id", "enqueteur", "start", "end", "lat", "lon")
+            if mp.get(k)
+        }
+        if name in technical_cols:
+            return False
+
+    # ---- Exclusions par type ----
     if var["type"] in EXCLUDED_TYPES:
         return False
+
+    # ---- Exclusions de qualite ----
     if var["fill_rate"] < 20:
         return False
     if var["uniques"] <= 1:
         return False
-    if any(p in name for p in EXCLUDED_NAME_PATTERNS):
+
+    # ---- Exclusions par pattern de nom (metadonnees de collecte) ----
+    if any(p in name_lower for p in EXCLUDED_NAME_PATTERNS):
         return False
     if name.startswith("_") or name.startswith("__"):
         return False
+
     return True
+
+
+def _get_exclusion_reason(var: dict, mp: dict | None = None) -> str | None:
+    """Renvoie la raison d'exclusion d'une variable (None si elle est retenue).
+
+    Permet a l'utilisateur de savoir POURQUOI une variable a ete ecartee.
+    """
+    name = var["name"]
+    name_lower = name.lower()
+
+    # 1. Colonne-cle declaree par l'utilisateur (priorite explicite)
+    if mp:
+        for k in ("id", "enqueteur", "start", "end", "lat", "lon"):
+            if mp.get(k) == name:
+                labels = {
+                    "id": "Identifiant unique declare",
+                    "enqueteur": "Colonne enqueteur declaree",
+                    "start": "Horodatage de debut declare",
+                    "end": "Horodatage de fin declare",
+                    "lat": "Latitude GPS declaree",
+                    "lon": "Longitude GPS declaree",
+                }
+                return labels.get(k, f"Colonne-cle declaree ({k})")
+
+    # 2. Type non analysable
+    if var["type"] in EXCLUDED_TYPES:
+        labels = {
+            "identifiant": "Type identifiant (non analysable)",
+            "date":        "Type date (non pertinent pour le client)",
+            "vide":        "Variable entierement vide",
+        }
+        return labels.get(var["type"], f"Type non analysable ({var['type']})")
+
+    # 3. Qualite insuffisante
+    if var["fill_rate"] < 20:
+        return f"Taux de remplissage trop faible ({var['fill_rate']}%)"
+    if var["uniques"] <= 1:
+        return "Variable constante (1 seule valeur)"
+
+    # 4. Pattern de nom (metadonnee de collecte)
+    for p in EXCLUDED_NAME_PATTERNS:
+        if p in name_lower:
+            return f"Metadonnee technique (motif '{p}')"
+
+    # 5. Prefixe _ (variable systeme)
+    if name.startswith("_"):
+        return "Variable systeme (prefixe '_')"
+
+    return None  # Variable retenue
+
+
+def compute_analysis_scope(profile: dict, mp: dict | None = None) -> dict:
+    """Calcule le perimetre d'analyse : variables retenues vs exclues.
+
+    Cette fonction expose AU CLIENT et AU RESPONSABLE QC ce qui sera
+    effectivement analyse dans le rapport, et POURQUOI certaines variables
+    ont ete ecartees. Cle pour la transparence du livrable.
+
+    Args:
+        profile : profil complet des variables (issu de profile_dataset)
+        mp      : mapping des colonnes-cles {id, enqueteur, start, end, lat, lon}
+
+    Returns:
+        {
+          "retained":     [{name, label, type, fill_rate, uniques}],
+          "excluded":     [{name, label, type, reason}],
+          "n_total":      nombre total de variables,
+          "n_retained":   nombre retenu pour le rapport client,
+          "n_excluded":   nombre exclu (techniques / metadonnees / qualite),
+          "exclusion_summary": {reason: n}  -- regroupement par raison
+        }
+    """
+    retained, excluded = [], []
+    exclusion_summary = {}
+
+    for v in profile.get("variables", []):
+        reason = _get_exclusion_reason(v, mp)
+        base = {
+            "name":      v["name"],
+            "label":     v.get("label", "") or v["name"],
+            "type":      v["type"],
+        }
+        if reason is None:
+            retained.append({
+                **base,
+                "fill_rate": v["fill_rate"],
+                "uniques":   v["uniques"],
+            })
+        else:
+            excluded.append({**base, "reason": reason})
+            # Regroupement haut-niveau pour le resume
+            high_level = reason.split(" (")[0].split(" '")[0]
+            exclusion_summary[high_level] = exclusion_summary.get(high_level, 0) + 1
+
+    return {
+        "retained":          retained,
+        "excluded":          excluded,
+        "n_total":           len(retained) + len(excluded),
+        "n_retained":        len(retained),
+        "n_excluded":        len(excluded),
+        "exclusion_summary": exclusion_summary,
+    }
 
 
 # ----------------------------------------------------------------------
@@ -139,13 +301,29 @@ def _is_analyzable(var: dict) -> bool:
 # ----------------------------------------------------------------------
 
 PLANNER_SYSTEM = """Tu es un expert statisticien specialise dans l'analyse d'enquetes.
-Ton role : a partir du profil d'un jeu de donnees, proposer un PLAN D'ANALYSE pertinent
-pour un rapport analytique professionnel destine a un client.
+Ton role : produire un PLAN D'ANALYSE pour un RAPPORT DESTINE AU COMMANDITAIRE
+de l'enquete (entreprise, ONG, organisation publique, bailleur de fonds).
 
-Tu dois identifier :
-1. Les variables sociodemographiques (age, sexe, genre, education, region, profession, revenu, statut...)
-2. Les variables principales d'interet (selon le contexte de l'enquete)
-3. Les croisements significatifs (sociodemo x variable principale)
+CE RAPPORT N'EST PAS UN RAPPORT INTERNE DE PILOTAGE TERRAIN.
+Il doit faire ressortir des INSIGHTS METIER UTILES pour le commanditaire :
+- caracteristiques sociodemographiques de la population enquetee
+- comportements, opinions, conditions de vie, niveaux de vie
+- variables d'interet specifiques au theme de l'enquete
+- croisements pertinents qui revelent des segments ou des disparites
+- patterns interessants pour la prise de decision
+
+Tu identifies :
+1. Les variables sociodemographiques (age, sexe, region, education, profession, revenu, statut...)
+2. Les variables principales d'interet (selon le theme de l'enquete)
+3. Les croisements significatifs (sociodemo x variable principale, ou variable x variable)
+
+REGLES STRICTES :
+- IGNORE totalement les variables techniques / logistiques internes :
+  identifiants (uuid, codes systeme), metadonnees de collecte (horodatage, GPS),
+  informations sur les enqueteurs (nom, code, duree). Ces variables sont absentes
+  de la liste fournie ci-dessous : ne tente JAMAIS d'en ajouter ou d'en inferer.
+- Concentre-toi UNIQUEMENT sur les variables qui apportent une information
+  utile au commanditaire pour comprendre sa population cible.
 
 Tu reponds UNIQUEMENT en JSON valide, sans markdown, sans texte autour.
 """
@@ -199,16 +377,26 @@ def _build_planner_input(variables: list) -> list:
 
 
 def plan_report(api: str, api_key: str, profile: dict,
-                survey_context: dict, progress_cb=None) -> dict:
+                survey_context: dict, progress_cb=None,
+                mp: dict | None = None) -> dict:
+    """Plan d'analyse IA. Filtre prealablement les variables techniques
+    via _is_analyzable(var, mp) en utilisant le mapping de colonnes-cles
+    declare par l'utilisateur."""
     if progress_cb:
-        progress_cb("Filtrage des variables pertinentes...")
+        progress_cb("Filtrage des variables pertinentes pour le commanditaire...")
 
-    analyzable = [v for v in profile["variables"] if _is_analyzable(v)]
+    analyzable = [v for v in profile["variables"] if _is_analyzable(v, mp)]
     if not analyzable:
         return {"univariate": [], "bivariate": []}
 
     if progress_cb:
-        progress_cb(f"{len(analyzable)} variables retenues. L'IA prepare le plan...")
+        n_total = len(profile["variables"])
+        n_filtered = n_total - len(analyzable)
+        progress_cb(
+            f"{len(analyzable)} variables retenues "
+            f"({n_filtered} exclues car techniques / metadonnees). "
+            f"L'IA prepare le plan..."
+        )
 
     vars_json = json.dumps(_build_planner_input(analyzable), ensure_ascii=False, indent=2)
     user_prompt = PLANNER_USER_TEMPLATE.format(
@@ -297,10 +485,39 @@ def compute_univariate(df: pd.DataFrame, var_info: dict) -> dict:
             }
             for k, v in vc_display.items()
         ]
-        # Adaptation automatique selon le nombre de modalites
-        if len(vc_display) <= 6:
+
+        # Selection intelligente du type de graphe (v3 - diversification)
+        # Critères : nb modalités + concentration (part du top1) + longueur libellés
+        n_modal = len(vc_display)
+        top1_pct = (vc_display.iloc[0] / n_total * 100) if n_total > 0 else 0
+        max_label_len = max((len(str(k)) for k in vc_display.index), default=10)
+        # Concentration "forte" si le top1 fait > 50% du total
+        is_concentrated = top1_pct > 50
+
+        if n_modal <= 2:
+            # Binaire / quasi-binaire : donut reste le plus parlant
             result["chart"] = "donut"
+        elif n_modal <= 5:
+            # Peu de modalités : barres verticales = comparaison directe impactante
+            # Sauf si une catégorie écrase tout : alors donut pour montrer le poids
+            result["chart"] = "donut" if is_concentrated else "bar_vertical"
+        elif n_modal <= 8:
+            # 6-8 modalités : choix selon longueur des libellés
+            #   labels longs -> horizontal (lisible)
+            #   labels courts -> donut (esthétique) ou bar_vertical (comparaison)
+            if max_label_len > 12:
+                result["chart"] = "bar_horizontal"
+            else:
+                result["chart"] = "donut" if is_concentrated else "bar_vertical"
+        elif n_modal <= 15:
+            # 9-15 modalités : Pareto pour identifier les "vital few" 80/20
+            # Pertinent quand la distribution est inegale (concentration moyenne+)
+            if top1_pct > 25:
+                result["chart"] = "pareto"
+            else:
+                result["chart"] = "bar_horizontal"
         else:
+            # 16+ : lollipop reste le plus efficace pour beaucoup de modalités
             result["chart"] = "lollipop"
     return result
 
@@ -323,7 +540,7 @@ def compute_bivariate(df: pd.DataFrame, var1_info: dict, var2_info: dict) -> dic
         result["error"] = "Aucune ligne avec les deux variables renseignees"
         return result
 
-    # ---- CAT x CAT : heatmap
+    # ---- CAT x CAT : heatmap OU stacked_100 selon la taille
     if t1 != "numerique" and t2 != "numerique":
         top1 = sub[col1].astype(str).value_counts().head(8).index
         top2 = sub[col2].astype(str).value_counts().head(8).index
@@ -338,7 +555,15 @@ def compute_bivariate(df: pd.DataFrame, var1_info: dict, var2_info: dict) -> dic
             "columns": ct.columns.tolist(),
             "values": ct.values.tolist(),
         }
-        result["chart"] = "heatmap"
+        # Selection intelligente :
+        #   - Petit tableau (peu de modalites par dimension) -> stacked_100 (lisible)
+        #   - Grand tableau -> heatmap (synthese visuelle)
+        n_idx = len(ct.index)
+        n_cols = len(ct.columns)
+        if n_idx <= 6 and n_cols <= 5:
+            result["chart"] = "stacked_100"
+        else:
+            result["chart"] = "heatmap"
 
     # ---- CAT x NUM : boxplot
     elif (t1 == "numerique") != (t2 == "numerique"):
@@ -376,7 +601,17 @@ def compute_bivariate(df: pd.DataFrame, var1_info: dict, var2_info: dict) -> dic
                 raw_groups["labels"].append(str(cat))
                 raw_groups["values"].append(vals.tolist())
         result["raw_groups"] = raw_groups
-        result["chart"] = "boxplot"
+        # Selection intelligente :
+        #   - Petit n par groupe (<=200) -> violin (montre la forme de distrib)
+        #   - Gros n -> boxplot (plus rapide a lire pour gros volumes)
+        n_per_group = [len(v) for v in raw_groups["values"]]
+        max_n = max(n_per_group) if n_per_group else 0
+        min_n = min(n_per_group) if n_per_group else 0
+        # Violon : il faut au moins 5 valeurs par groupe (sinon le KDE est mauvais)
+        if max_n <= 200 and min_n >= 5:
+            result["chart"] = "violin"
+        else:
+            result["chart"] = "boxplot"
 
     # ---- NUM x NUM : scatter + regression
     else:
@@ -840,16 +1075,360 @@ def chart_scatter_regression(biv: dict) -> bytes:
 
 # ---- DISPATCHER -----------------------------------------------------------
 
+# ======================================================================
+#  NOUVEAUX TYPES DE GRAPHIQUES (v3 - diversification)
+# ======================================================================
+
+# ---- 7. BAR VERTICAL ------------------------------------------------------
+
+def chart_bar_vertical(uni: dict) -> bytes:
+    """Barres verticales modernes - impactantes pour 3-8 modalites.
+
+    Plus carre que le donut, mieux que le lollipop pour faire ressortir
+    les comparaisons d'effectifs directs.
+    """
+    _setup_sista_style()
+    fig, ax = plt.subplots(figsize=(8, 4.8))
+
+    dist = uni["distribution"]
+    if not dist:
+        ax.text(0.5, 0.5, "Donnees insuffisantes", ha="center", va="center",
+                color=SISTA["gray"])
+        ax.set_axis_off()
+        return _fig_to_png_bytes(fig)
+
+    labels = [d["modalite"][:18] for d in dist]
+    sizes = [d["effectif"] for d in dist]
+    total = sum(sizes)
+    pcts = [round(100 * s / total, 1) if total else 0 for s in sizes]
+
+    # Mise en evidence de la modalite dominante en gold
+    max_idx = sizes.index(max(sizes))
+    colors = [SISTA["gold_deep"] if i == max_idx else SISTA["navy_soft"]
+              for i in range(len(sizes))]
+
+    x = np.arange(len(labels))
+    bars = ax.bar(x, sizes, color=colors, edgecolor="white", linewidth=1.5,
+                  width=0.7)
+
+    # Etiquettes au-dessus des barres : effectif + %
+    max_h = max(sizes) if sizes else 1
+    for bar, n, p in zip(bars, sizes, pcts):
+        h = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width() / 2,
+                h + max_h * 0.02,
+                f"{n}\n({p}%)",
+                ha="center", va="bottom",
+                fontsize=10, fontweight="bold", color=SISTA["navy"])
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels, rotation=20 if max(len(l) for l in labels) > 10 else 0,
+                       ha="right" if max(len(l) for l in labels) > 10 else "center",
+                       fontsize=10)
+    ax.set_ylabel("Effectif")
+    ax.set_title(uni["label"][:70], pad=14)
+    ax.set_ylim(0, max_h * 1.18)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.grid(True, axis="y", alpha=0.3)
+
+    return _fig_to_png_bytes(fig)
+
+
+# ---- 8. BAR HORIZONTAL ----------------------------------------------------
+
+def chart_bar_horizontal(uni: dict) -> bytes:
+    """Barres horizontales classiques - ideales pour libelles longs.
+
+    Alternative au lollipop avec un aspect plus solide / corporate.
+    """
+    _setup_sista_style()
+    dist = uni["distribution"]
+    n_items = len(dist)
+    fig, ax = plt.subplots(figsize=(8, max(3.5, 0.42 * n_items + 1.5)))
+
+    if not dist:
+        ax.text(0.5, 0.5, "Donnees insuffisantes", ha="center", va="center",
+                color=SISTA["gray"])
+        ax.set_axis_off()
+        return _fig_to_png_bytes(fig)
+
+    # Tri DESC pour lecture naturelle (top en haut)
+    dist_sorted = sorted(dist, key=lambda d: d["effectif"], reverse=True)
+    labels = [d["modalite"][:35] for d in dist_sorted]
+    sizes = [d["effectif"] for d in dist_sorted]
+    pcts = [d["pourcentage"] for d in dist_sorted]
+    total = sum(sizes)
+
+    # Gradient navy -> navy_soft du plus grand au plus petit
+    n = len(sizes)
+    colors = []
+    for i in range(n):
+        # Top en navy fonce, queue en navy plus doux
+        ratio = i / max(1, n - 1)
+        colors.append(SISTA["navy"] if ratio < 0.33
+                      else SISTA["navy_soft"] if ratio < 0.66
+                      else "#A8B5C7")
+
+    y = np.arange(n)[::-1]  # inverse pour avoir le top en haut
+    bars = ax.barh(y, sizes, color=colors, edgecolor="white", linewidth=1.2,
+                   height=0.75)
+
+    # Etiquettes en bout de barre : effectif (pct%)
+    max_w = max(sizes) if sizes else 1
+    for bar, n_val, p in zip(bars, sizes, pcts):
+        w = bar.get_width()
+        ax.text(w + max_w * 0.015, bar.get_y() + bar.get_height() / 2,
+                f"{n_val} ({p}%)",
+                ha="left", va="center",
+                fontsize=9, fontweight="bold", color=SISTA["navy"])
+
+    ax.set_yticks(y)
+    ax.set_yticklabels(labels, fontsize=10)
+    ax.set_xlabel("Effectif")
+    ax.set_title(uni["label"][:70], pad=12)
+    ax.set_xlim(0, max_w * 1.20)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["left"].set_visible(False)
+    ax.grid(True, axis="x", alpha=0.3)
+
+    return _fig_to_png_bytes(fig)
+
+
+# ---- 9. PARETO CHART ------------------------------------------------------
+
+def chart_pareto(uni: dict) -> bytes:
+    """Pareto : barres triees DESC + courbe cumulee.
+
+    Met en evidence le principe 80/20 : combien de modalites expliquent
+    quel pourcentage du total. Tres parlant pour reperer les dominantes.
+    """
+    _setup_sista_style()
+    fig, ax1 = plt.subplots(figsize=(8.5, 5))
+
+    dist = uni["distribution"]
+    if not dist:
+        ax1.text(0.5, 0.5, "Donnees insuffisantes", ha="center", va="center",
+                 color=SISTA["gray"])
+        ax1.set_axis_off()
+        return _fig_to_png_bytes(fig)
+
+    # Tri decroissant
+    dist_sorted = sorted(dist, key=lambda d: d["effectif"], reverse=True)
+    labels = [d["modalite"][:18] for d in dist_sorted]
+    sizes = [d["effectif"] for d in dist_sorted]
+    total = sum(sizes)
+    cum_pct = np.cumsum(sizes) / total * 100 if total else np.zeros(len(sizes))
+
+    x = np.arange(len(labels))
+
+    # Barres en navy
+    bars = ax1.bar(x, sizes, color=SISTA["navy_soft"], edgecolor="white",
+                   linewidth=1.2, width=0.75, label="Effectif")
+    # Coloration speciale du top 3
+    for i, b in enumerate(bars[:3]):
+        b.set_color(SISTA["navy"])
+    ax1.set_xticks(x)
+    ax1.set_xticklabels(labels, rotation=30, ha="right", fontsize=9)
+    ax1.set_ylabel("Effectif", color=SISTA["navy"])
+    ax1.tick_params(axis="y", labelcolor=SISTA["navy"])
+    ax1.spines["top"].set_visible(False)
+    ax1.grid(True, axis="y", alpha=0.3)
+
+    # Courbe cumulee sur axe secondaire en gold
+    ax2 = ax1.twinx()
+    ax2.plot(x, cum_pct, color=SISTA["gold_deep"], linewidth=2.5,
+             marker="o", markersize=7, markerfacecolor=SISTA["gold"],
+             markeredgecolor=SISTA["gold_deep"], markeredgewidth=1.5,
+             label="% cumulé")
+    # Ligne de reference 80%
+    ax2.axhline(80, color="#C0392B", linestyle="--", linewidth=1.2, alpha=0.7)
+    ax2.text(len(x) - 0.5, 82, "80%", color="#C0392B", fontsize=9,
+             fontweight="bold", ha="right")
+
+    ax2.set_ylabel("% cumulé", color=SISTA["gold_deep"])
+    ax2.tick_params(axis="y", labelcolor=SISTA["gold_deep"])
+    ax2.set_ylim(0, 105)
+    ax2.spines["top"].set_visible(False)
+
+    # Identifier les "vital few" (modalites avant 80%)
+    n_vital = int(np.argmax(cum_pct >= 80)) + 1 if any(cum_pct >= 80) else len(labels)
+    ax1.set_title(
+        f"{uni['label'][:60]}  —  {n_vital} modalité(s) explique(nt) ~80% du total",
+        pad=12, fontsize=11
+    )
+
+    return _fig_to_png_bytes(fig)
+
+
+# ---- 10. STACKED BAR 100% (bivarie cat x cat) ----------------------------
+
+def chart_stacked_100(biv: dict) -> bytes:
+    """Barres empilees 100% : alternative a la heatmap pour cat x cat.
+
+    Plus lisible que la heatmap quand on a peu de modalites en abscisse.
+    Chaque barre = 100% et montre la repartition d'une modalite par rapport
+    a l'autre variable.
+    """
+    _setup_sista_style()
+    fig, ax = plt.subplots(figsize=(8.5, 5))
+
+    ct = biv.get("crosstab", {})
+    rows = ct.get("index", [])
+    cols = ct.get("columns", [])
+    values = ct.get("values", [])  # deja normalises en %
+
+    if not rows or not cols:
+        ax.text(0.5, 0.5, "Donnees insuffisantes", ha="center", va="center",
+                color=SISTA["gray"])
+        ax.set_axis_off()
+        return _fig_to_png_bytes(fig)
+
+    values_arr = np.asarray(values, dtype=float)  # shape (n_rows, n_cols)
+    n_rows, n_cols = values_arr.shape
+
+    y = np.arange(n_rows)
+    left = np.zeros(n_rows)
+    colors = SISTA_PALETTE[:n_cols] if n_cols <= len(SISTA_PALETTE) \
+             else (SISTA_PALETTE * ((n_cols // len(SISTA_PALETTE)) + 1))[:n_cols]
+
+    for j in range(n_cols):
+        seg = values_arr[:, j]
+        bars = ax.barh(y, seg, left=left, height=0.7, color=colors[j],
+                       edgecolor="white", linewidth=1.2,
+                       label=str(cols[j])[:18])
+        # Etiquette de pourcentage SI le segment est >= 8% (sinon illisible)
+        for b, val, lf in zip(bars, seg, left):
+            if val >= 8:
+                ax.text(lf + val / 2, b.get_y() + b.get_height() / 2,
+                        f"{val:.0f}%",
+                        ha="center", va="center",
+                        fontsize=9, color="white", fontweight="bold")
+        left += seg
+
+    ax.set_yticks(y)
+    ax.set_yticklabels([str(r)[:25] for r in rows], fontsize=10)
+    ax.set_xlabel(f"Répartition (%) de {biv.get('label2', biv.get('var2', ''))[:30]}")
+    ax.set_xlim(0, 100)
+    ax.set_title(
+        f"{biv.get('label1', biv.get('var1', ''))[:35]} × "
+        f"{biv.get('label2', biv.get('var2', ''))[:35]}",
+        pad=12, fontsize=11,
+    )
+    ax.legend(loc="lower center", bbox_to_anchor=(0.5, -0.18),
+              ncol=min(n_cols, 4), frameon=False, fontsize=9)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.grid(True, axis="x", alpha=0.3)
+    plt.tight_layout()
+
+    return _fig_to_png_bytes(fig)
+
+
+# ---- 11. VIOLIN PLOT (bivarie cat x num) ----------------------------------
+
+def chart_violin(biv: dict) -> bytes:
+    """Violons : alternative au boxplot, montre la distribution complete.
+
+    Plus moderne et plus informatif quand on veut voir la forme de la
+    distribution (multi-modalite, asymetrie...).
+    """
+    _setup_sista_style()
+    fig, ax = plt.subplots(figsize=(8.5, 4.8))
+
+    rg = biv.get("raw_groups", {})
+    labels = rg.get("labels", [])
+    groups = rg.get("values", [])
+
+    # Filtrer les groupes vides
+    valid = [(l, v) for l, v in zip(labels, groups) if v and len(v) >= 2]
+    if not valid:
+        ax.text(0.5, 0.5, "Donnees insuffisantes pour un violon",
+                ha="center", va="center", color=SISTA["gray"])
+        ax.set_axis_off()
+        return _fig_to_png_bytes(fig)
+
+    labels = [l[:22] for l, _ in valid]
+    groups = [v for _, v in valid]
+
+    parts = ax.violinplot(groups, showmeans=False, showmedians=False,
+                          showextrema=False, widths=0.78)
+    # Style des violons : navy_soft remplissage + bord navy
+    for body in parts["bodies"]:
+        body.set_facecolor(SISTA["navy_soft"])
+        body.set_edgecolor(SISTA["navy"])
+        body.set_linewidth(1.5)
+        body.set_alpha(0.75)
+
+    # Surperposer mediane (point gold) + boxplot fin par-dessus
+    bp = ax.boxplot(groups, widths=0.15, showcaps=True, showfliers=False,
+                    patch_artist=True,
+                    boxprops=dict(facecolor=SISTA["navy"], edgecolor="white",
+                                  linewidth=1.5),
+                    medianprops=dict(color=SISTA["gold"], linewidth=2.5),
+                    whiskerprops=dict(color=SISTA["navy"], linewidth=1.2),
+                    capprops=dict(color=SISTA["navy"], linewidth=1.5))
+
+    # Moyenne en losange gold par-dessus
+    for i, vals in enumerate(groups, start=1):
+        ax.scatter([i], [np.mean(vals)],
+                   marker="D", color=SISTA["gold_deep"], s=55,
+                   edgecolor="white", linewidth=1.5, zorder=4)
+
+    ax.set_xticks(np.arange(1, len(labels) + 1))
+    ax.set_xticklabels(labels, rotation=20 if max(len(l) for l in labels) > 10 else 0,
+                       ha="right" if max(len(l) for l in labels) > 10 else "center",
+                       fontsize=10)
+
+    agg = biv.get("aggregation", {})
+    num_var = agg.get("num_var", "")
+    cat_var = agg.get("cat_var", "")
+    ax.set_ylabel(num_var)
+    ax.set_xlabel(cat_var)
+    ax.set_title(
+        f"Distribution de {num_var[:25]} selon {cat_var[:25]}",
+        pad=12, fontsize=11,
+    )
+
+    # Petite legende explicative
+    from matplotlib.patches import Patch
+    from matplotlib.lines import Line2D
+    legend_elems = [
+        Patch(facecolor=SISTA["navy_soft"], edgecolor=SISTA["navy"],
+              label="Distribution"),
+        Line2D([0], [0], color=SISTA["gold"], lw=2.5, label="Médiane"),
+        Line2D([0], [0], marker="D", color="w", markerfacecolor=SISTA["gold_deep"],
+               markersize=8, markeredgecolor="white", label="Moyenne"),
+    ]
+    ax.legend(handles=legend_elems, loc="upper right", frameon=False, fontsize=9)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.grid(True, axis="y", alpha=0.3)
+
+    return _fig_to_png_bytes(fig)
+
+
+# ======================================================================
+#  Dispatcher unifie (avec nouveaux types)
+# ======================================================================
+
 def render_chart(item: dict, kind: str) -> bytes:
     """Dispatcher unifie des graphiques (avec fallbacks legacy)."""
     handlers = {
-        # Nouveaux types
+        # Types historiques (v1-v2)
         "histogram_kde": chart_histogram_kde,
         "donut":         chart_donut,
         "lollipop":      chart_lollipop,
         "heatmap":       chart_heatmap,
         "boxplot":       chart_boxplot,
         "scatter_reg":   chart_scatter_regression,
+        # NOUVEAUX types (v3 - diversification)
+        "bar_vertical":  chart_bar_vertical,
+        "bar_horizontal":chart_bar_horizontal,
+        "pareto":        chart_pareto,
+        "stacked_100":   chart_stacked_100,
+        "violin":        chart_violin,
         # Alias retro-compatibles (anciens noms)
         "histogram":   chart_histogram_kde,
         "pie":         chart_donut,
@@ -986,16 +1565,22 @@ def build_report_content(
     qc_results: list = None,
     qc_stats: dict = None,
     progress_cb=None,
+    mp: dict | None = None,
 ) -> dict:
     """
     Pipeline complet (plan IA + calculs + graphes + interpretations IA)
     -> dict serialisable contenant TOUT le rapport.
+
+    Args:
+        mp : mapping des colonnes-cles {id, enqueteur, start, end, lat, lon}
+             Les colonnes referencees ici sont EXCLUES de l'analyse car
+             techniques (rapport destine au commanditaire, pas au bureau d'etudes).
     """
     if progress_cb:
         progress_cb("Demarrage de la generation du rapport...")
 
-    # Passe 1 : plan
-    plan = plan_report(api, api_key, profile, survey_context, progress_cb)
+    # Passe 1 : plan (filtre les variables techniques via mp)
+    plan = plan_report(api, api_key, profile, survey_context, progress_cb, mp=mp)
 
     if not plan.get("univariate") and not plan.get("bivariate"):
         raise RuntimeError("L'IA n'a propose aucune analyse exploitable.")
@@ -1094,6 +1679,10 @@ def build_report_content(
         for v in profile["variables"]
     ]
 
+    # Perimetre d'analyse : transparence pour le client.
+    # Indique CE QUI a ete analyse et CE QUI a ete ecarte (et pourquoi).
+    analysis_scope = compute_analysis_scope(profile, mp)
+
     content = {
         "meta": {
             "filename": filename,
@@ -1104,6 +1693,7 @@ def build_report_content(
         },
         "executive_summary": interpretations.get("executive_summary", ""),
         "methodology": methodology,
+        "analysis_scope": analysis_scope,
         "univariate": univariate_results,
         "bivariate": bivariate_results,
         "qc_summary": qc_summary,
@@ -1425,6 +2015,51 @@ def compose_word_from_content(content: dict) -> bytes:
     if survey_ctx.get("population"):
         _add_paragraph(doc, "Population cible : " + survey_ctx["population"])
     doc.add_paragraph()
+
+    # Perimetre d'analyse : transparence sur les variables retenues vs exclues
+    scope = content.get("analysis_scope")
+    if scope and scope.get("n_total"):
+        _add_heading(doc, "Perimetre d'analyse", level=1)
+        _add_paragraph(
+            doc,
+            f"Le fichier source contient {scope['n_total']} variables. "
+            f"Pour ce rapport destine au commanditaire, {scope['n_retained']} variables "
+            f"ont ete retenues pour l'analyse statistique. Les {scope['n_excluded']} variables "
+            f"restantes ont ete ecartees car elles correspondent a des metadonnees techniques "
+            f"de collecte (identifiants, horodatages, GPS, enqueteur, commentaires libres, "
+            f"contacts personnels) sans valeur pour l'interpretation metier.",
+            size=10,
+        )
+
+        # Resume par categorie d'exclusion
+        if scope.get("exclusion_summary"):
+            doc.add_paragraph()
+            _add_paragraph(doc, "Resume des exclusions :", bold=True, size=10)
+            sum_table = doc.add_table(rows=1, cols=2)
+            sum_table.style = "Light Grid Accent 1"
+            hdr = sum_table.rows[0].cells
+            for i, h in enumerate(["Motif d'exclusion", "Nb variables"]):
+                hdr[i].text = ""
+                p = hdr[i].paragraphs[0]
+                run = p.add_run(h)
+                run.bold = True
+                run.font.color.rgb = _rgb(SISTA["white"])
+                run.font.size = Pt(10)
+                _set_cell_background(hdr[i], SISTA["navy"])
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            for reason, n in sorted(scope["exclusion_summary"].items(),
+                                     key=lambda x: -x[1]):
+                cells = sum_table.add_row().cells
+                cells[0].text = reason
+                cells[1].text = str(n)
+                cells[1].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+                for c in cells:
+                    for p in c.paragraphs:
+                        for r in p.runs:
+                            r.font.size = Pt(9)
+
+        doc.add_paragraph()
+    # Fin perimetre d'analyse
 
     # Univariees : sociodemo d'abord
     socio = [u for u in content["univariate"] if u.get("category") == "sociodemo"]

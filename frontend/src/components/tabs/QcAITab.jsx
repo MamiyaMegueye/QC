@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { useStore } from "../../store/useStore"
 import { api } from "../../api/client"
 import MetricCard from "../cards/MetricCard"
@@ -8,11 +8,15 @@ import {
   ChevronDown,
   ChevronUp,
   Sparkles,
-  LayoutGrid,
-  Table as TableIcon,
   Power,
   PowerOff,
   AlertTriangle,
+  Eye,
+  EyeOff,
+  Search,
+  AlertCircle,
+  Clock,
+  Zap,
 } from "lucide-react"
 
 const SEV_LABEL = { high: "Gravité haute", med: "Gravité moyenne", low: "Gravité faible" }
@@ -26,11 +30,24 @@ const SEV_BG = {
   med: "bg-orange-50 text-orange-800",
   low: "bg-blue-50 text-blue-800",
 }
+const SEV_ICON = {
+  high: AlertCircle,
+  med: AlertTriangle,
+  low: Sparkles,
+}
+
+// Severite "agregee" pour une regle = max(severite des cas)
+function getRuleSeverite(nCas) {
+  if (nCas > 10) return "high"
+  if (nCas > 3) return "med"
+  if (nCas > 0) return "low"
+  return null
+}
 
 export default function QcAITab() {
   const store = useStore()
-  const [viewMode, setViewMode] = useState("cards")
-  const [rulesExpanded, setRulesExpanded] = useState(false)
+  const [expandedRules, setExpandedRules] = useState(new Set())
+  const [filterText, setFilterText] = useState("")
 
   // Indices des règles désactivées par l'utilisateur (Set)
   const [disabledRules, setDisabledRules] = useState(() => new Set())
@@ -47,7 +64,8 @@ export default function QcAITab() {
     if (!store.sessionId) return
     store.setIsGenerating(true)
     store.setApiError(null)
-    setDisabledRules(new Set()) // reset les règles désactivées
+    setDisabledRules(new Set())
+    setExpandedRules(new Set())
     try {
       const data = await api.generateRules({
         session_id: store.sessionId,
@@ -80,24 +98,76 @@ export default function QcAITab() {
     })
   }
 
+  const toggleExpand = (ruleIdx) => {
+    setExpandedRules((prev) => {
+      const next = new Set(prev)
+      if (next.has(ruleIdx)) next.delete(ruleIdx)
+      else next.add(ruleIdx)
+      return next
+    })
+  }
+
   const enableAllRules = () => setDisabledRules(new Set())
   const disableAllRules = () => {
     if (!store.aiRules) return
     setDisabledRules(new Set(store.aiRules.map((_, i) => i)))
   }
 
-  // ─── Cas filtrés (excluant les règles désactivées) ─────────────────────
-  const filteredCases = useMemo(() => {
-    if (!store.aiResult?.lignes) return []
-    if (disabledRules.size === 0) return store.aiResult.lignes
-    return store.aiResult.lignes.filter(
-      (cas) => !disabledRules.has(cas._rule_idx)
-    )
-  }, [store.aiResult, disabledRules])
+  // ─── Regrouper les cas par regle (indispensable pour l'agregation) ─
+  const casesByRule = useMemo(() => {
+    const map = new Map()
+    if (!store.aiResult?.lignes) return map
+    for (const cas of store.aiResult.lignes) {
+      const ri = cas._rule_idx
+      if (!map.has(ri)) map.set(ri, [])
+      map.get(ri).push(cas)
+    }
+    return map
+  }, [store.aiResult])
 
-  const nbCasActifs = filteredCases.length
-  const nbCasTotal = store.aiResult?.lignes?.length || 0
-  const nbCasHidden = nbCasTotal - nbCasActifs
+  // ─── Liste des regles enrichie : avec n_cas + severite + filtrage texte ─
+  const enrichedRules = useMemo(() => {
+    if (!store.aiRules) return []
+    const filter = filterText.trim().toLowerCase()
+    return store.aiRules.map((r, i) => {
+      const cases = casesByRule.get(i) || []
+      const nCas = cases.length
+      const sev = getRuleSeverite(nCas)
+      const isDisabled = disabledRules.has(i)
+      const matchesFilter =
+        !filter ||
+        (r.description || "").toLowerCase().includes(filter)
+      return { rule: r, idx: i, cases, nCas, sev, isDisabled, matchesFilter }
+    })
+  }, [store.aiRules, casesByRule, disabledRules, filterText])
+
+  // Tri : actives d'abord, puis par n_cas DESC, puis par severite
+  const sortedRules = useMemo(() => {
+    const sevOrder = { high: 0, med: 1, low: 2, null: 3 }
+    return [...enrichedRules]
+      .filter((r) => r.matchesFilter)
+      .sort((a, b) => {
+        if (a.isDisabled !== b.isDisabled) return a.isDisabled ? 1 : -1
+        if (a.nCas !== b.nCas) return b.nCas - a.nCas
+        return sevOrder[a.sev || "null"] - sevOrder[b.sev || "null"]
+      })
+  }, [enrichedRules])
+
+  const totalCasActifs = enrichedRules
+    .filter((r) => !r.isDisabled)
+    .reduce((sum, r) => sum + r.nCas, 0)
+  const totalCasMasques = enrichedRules
+    .filter((r) => r.isDisabled)
+    .reduce((sum, r) => sum + r.nCas, 0)
+
+  // Pour les actions "tout deplier" : on cible uniquement les regles
+  // visibles ET qui ont des cas
+  const expandableIdx = sortedRules
+    .filter((r) => r.nCas > 0 && !r.isDisabled)
+    .map((r) => r.idx)
+
+  const expandAll = () => setExpandedRules(new Set(expandableIdx))
+  const collapseAll = () => setExpandedRules(new Set())
 
   return (
     <div>
@@ -115,6 +185,23 @@ export default function QcAITab() {
         volumineux, l'analyse se fait en plusieurs lots. Les règles sont
         ensuite exécutées sur <strong>100% du fichier</strong>.
       </p>
+
+      {/* Estimation de duree pour les gros fichiers */}
+      {!store.aiResult && store.profile?.summary?.n_vars > 100 && (
+        <div className="bg-blue-50 border-l-4 border-blue-500 rounded-r-xl p-3 px-4 mb-4 flex items-start gap-2 text-sm">
+          <Clock className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="font-bold text-blue-900 m-0">
+              Fichier volumineux détecté ({store.profile.summary.n_vars} colonnes)
+            </p>
+            <p className="text-blue-800 text-xs mt-1 m-0">
+              L'analyse IA peut prendre quelques minutes. Pour aller plus vite,
+              <strong> sélectionnez API 2 à l'étape 1</strong> (généralement plus rapide
+              que API 1 sur les gros fichiers).
+            </p>
+          </div>
+        </div>
+      )}
 
       {!store.aiResult && (
         <div className="flex justify-center">
@@ -138,9 +225,12 @@ export default function QcAITab() {
         </div>
       )}
 
+      {/* Chronometre + log de progression pendant l'analyse */}
+      {store.isGenerating && <GenerationProgress apiLabel={apiLabel} />}
+
       {store.aiResult && (
         <div className="slide-up">
-          {/* Métriques de l'appel */}
+          {/* Métriques globales */}
           {store.aiMetrics && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
               <MetricCard
@@ -199,284 +289,388 @@ export default function QcAITab() {
             </div>
           )}
 
-          {/* Liste des règles (avec toggle activer/désactiver) */}
-          <div className="mb-4">
-            <button
-              onClick={() => setRulesExpanded(!rulesExpanded)}
-              className="btn-secondary w-full justify-between flex items-center"
-            >
-              <span>
-                Voir les {store.aiRules.length} règles générées par l'IA
-                {disabledRules.size > 0 && (
-                  <span className="ml-2 text-amber-700 font-semibold">
-                    ({disabledRules.size} désactivée{disabledRules.size > 1 ? "s" : ""})
+          {/* Synthese globale */}
+          <div className="bg-white border border-gray-200 rounded-xl p-4 mb-4 flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <h3 className="font-sora font-bold text-navy text-lg m-0">
+                {totalCasActifs} cas détectés
+                {totalCasMasques > 0 && (
+                  <span className="text-sm text-gray-500 font-normal ml-2">
+                    ({totalCasMasques} masqué{totalCasMasques > 1 ? "s" : ""} par règles désactivées)
                   </span>
                 )}
-              </span>
-              {rulesExpanded ? (
-                <ChevronUp className="w-4 h-4" />
-              ) : (
-                <ChevronDown className="w-4 h-4" />
-              )}
+              </h3>
+              <p className="text-xs text-gray-500 m-0 mt-1">
+                Regroupés en {enrichedRules.filter((r) => !r.isDisabled).length} règle(s) active(s)
+              </p>
+            </div>
+            <button
+              onClick={handleExport}
+              className="btn-success flex items-center gap-2"
+              disabled={totalCasActifs === 0}
+            >
+              <Download className="w-4 h-4" />
+              Exporter en Excel
             </button>
-
-            {rulesExpanded && (
-              <div className="mt-2 space-y-2">
-                {/* Actions globales */}
-                <div className="flex gap-2 text-xs">
-                  <button
-                    onClick={enableAllRules}
-                    className="text-blue-700 hover:underline"
-                    disabled={disabledRules.size === 0}
-                  >
-                    Tout activer
-                  </button>
-                  <span className="text-gray-400">|</span>
-                  <button
-                    onClick={disableAllRules}
-                    className="text-red-700 hover:underline"
-                    disabled={disabledRules.size === store.aiRules.length}
-                  >
-                    Tout désactiver
-                  </button>
-                </div>
-
-                {store.aiRules.map((r, i) => {
-                  const nCas = store.aiResult.cas_par_regle?.[i] || 0
-                  const isDisabled = disabledRules.has(i)
-                  return (
-                    <div
-                      key={i}
-                      className={`bg-white border-l-4 rounded-r-xl p-3 px-4 shadow-sm transition-all ${
-                        isDisabled
-                          ? "border-gray-300 opacity-50"
-                          : "border-yellow-500"
-                      }`}
-                    >
-                      <div className="flex justify-between items-start gap-3">
-                        <div className="flex-1 min-w-0">
-                          <p className={`m-0 text-sm ${isDisabled ? "line-through text-gray-500" : ""}`}>
-                            <span className="font-bold text-navy">
-                              Règle {i + 1}
-                            </span>{" "}
-                            — {r.description}
-                          </p>
-                          <p className="text-gray-500 text-xs mt-1 m-0">
-                            {nCas} cas détecté{nCas > 1 ? "s" : ""}
-                            {isDisabled && " — masqués"}
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => toggleRule(i)}
-                          className={`flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                            isDisabled
-                              ? "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                              : "bg-green-100 text-green-800 hover:bg-green-200"
-                          }`}
-                          title={isDisabled ? "Réactiver cette règle" : "Désactiver cette règle"}
-                        >
-                          {isDisabled ? (
-                            <>
-                              <PowerOff className="w-3.5 h-3.5" />
-                              Désactivée
-                            </>
-                          ) : (
-                            <>
-                              <Power className="w-3.5 h-3.5" />
-                              Activée
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
           </div>
 
-          <h3 className="font-sora font-bold text-navy text-xl mb-3">
-            {nbCasActifs} cas détectés
-            {nbCasHidden > 0 && (
-              <span className="text-sm text-gray-500 font-normal ml-2">
-                ({nbCasHidden} masqué{nbCasHidden > 1 ? "s" : ""} par règles désactivées)
-              </span>
-            )}
-          </h3>
-
-          {filteredCases.length === 0 ? (
-            <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-green-800 text-center">
-              {nbCasTotal === 0
-                ? "Aucune incohérence détectée. Bravo !"
-                : "Tous les cas ont été masqués par les règles désactivées."}
+          {/* Toolbar : filtre + actions globales */}
+          <div className="flex flex-col md:flex-row gap-3 mb-4 items-stretch md:items-center">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                value={filterText}
+                onChange={(e) => setFilterText(e.target.value)}
+                placeholder="Rechercher une règle..."
+                className="input-field pl-9 py-2 w-full"
+              />
             </div>
-          ) : (
-            <>
-              {/* Toolbar */}
-              <div className="flex flex-col md:flex-row gap-3 mb-4 items-center">
-                <button
-                  onClick={handleExport}
-                  className="btn-success flex items-center gap-2"
-                >
-                  <Download className="w-4 h-4" />
-                  Exporter en Excel
-                </button>
-                <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
-                  <button
-                    onClick={() => setViewMode("cards")}
-                    className={`px-4 py-2 rounded-lg font-sora font-semibold text-sm flex items-center gap-2 transition-all ${
-                      viewMode === "cards"
-                        ? "bg-white text-navy shadow-sm"
-                        : "text-gray-500"
-                    }`}
-                  >
-                    <LayoutGrid className="w-4 h-4" /> Cartes
-                  </button>
-                  <button
-                    onClick={() => setViewMode("table")}
-                    className={`px-4 py-2 rounded-lg font-sora font-semibold text-sm flex items-center gap-2 transition-all ${
-                      viewMode === "table"
-                        ? "bg-white text-navy shadow-sm"
-                        : "text-gray-500"
-                    }`}
-                  >
-                    <TableIcon className="w-4 h-4" /> Tableau
-                  </button>
-                </div>
-              </div>
 
-              {/* Vue Cartes */}
-              {viewMode === "cards" && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {filteredCases.map((cas, i) => (
+            <div className="flex gap-2 flex-wrap">
+              <button
+                onClick={expandAll}
+                disabled={expandableIdx.length === 0}
+                className="text-xs flex items-center gap-1 px-3 py-2 rounded-lg bg-navy text-white hover:bg-navy-deep disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                Tout déplier
+              </button>
+              <button
+                onClick={collapseAll}
+                disabled={expandedRules.size === 0}
+                className="text-xs flex items-center gap-1 px-3 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <EyeOff className="w-3.5 h-3.5" />
+                Tout replier
+              </button>
+              <button
+                onClick={enableAllRules}
+                disabled={disabledRules.size === 0}
+                className="text-xs flex items-center gap-1 px-3 py-2 rounded-lg bg-green-100 text-green-800 hover:bg-green-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <Power className="w-3.5 h-3.5" />
+                Tout activer
+              </button>
+              <button
+                onClick={disableAllRules}
+                disabled={
+                  !store.aiRules || disabledRules.size === store.aiRules.length
+                }
+                className="text-xs flex items-center gap-1 px-3 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <PowerOff className="w-3.5 h-3.5" />
+                Tout désactiver
+              </button>
+            </div>
+          </div>
+
+          {sortedRules.length === 0 && (
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 text-gray-600 text-center text-sm">
+              {filterText
+                ? "Aucune règle ne correspond à votre recherche."
+                : "Aucune règle générée."}
+            </div>
+          )}
+
+          {/* Liste des regles agregees (chaque regle est un accordeon) */}
+          <div className="space-y-2">
+            {sortedRules.map(({ rule, idx, cases, nCas, sev, isDisabled }) => {
+              const sevStyle = sev ? SEV_BG[sev] : "bg-green-50 text-green-800"
+              const sevBorder = sev ? SEV_BORDER[sev] : "border-l-green-500"
+              const Icon = sev ? SEV_ICON[sev] : Sparkles
+              const isOpen = expandedRules.has(idx)
+              const hasCases = nCas > 0
+
+              return (
+                <div
+                  key={idx}
+                  className={`bg-white border border-gray-200 border-l-4 ${sevBorder} rounded-r-xl overflow-hidden shadow-sm transition-all ${
+                    isDisabled ? "opacity-60" : ""
+                  }`}
+                >
+                  {/* Header de la regle */}
+                  <div
+                    className={`p-3 px-4 flex items-center gap-3 ${
+                      hasCases && !isDisabled
+                        ? "cursor-pointer hover:bg-gray-50"
+                        : ""
+                    } transition-colors`}
+                    onClick={() =>
+                      hasCases && !isDisabled && toggleExpand(idx)
+                    }
+                  >
                     <div
-                      key={i}
-                      className={`bg-white border border-gray-200 border-l-4 ${
-                        SEV_BORDER[cas._severite]
-                      } rounded-xl p-3 px-4 shadow-sm hover:shadow-md transition-all`}
+                      className={`${sevStyle} rounded-full w-9 h-9 flex items-center justify-center flex-shrink-0`}
                     >
-                      <div className="flex justify-between items-center mb-2">
-                        <span
-                          className={`${
-                            SEV_BG[cas._severite]
-                          } px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wider`}
-                        >
-                          {SEV_LABEL[cas._severite]}
-                        </span>
-                        <span className="font-mono text-xs text-gray-500">
-                          Cas #{i + 1} | Ligne {cas._index}
-                        </span>
-                      </div>
-                      <p className="font-sora font-bold text-navy text-sm mb-2 m-0">
-                        {cas.Regle}
+                      <Icon className="w-4 h-4" />
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <p
+                        className={`font-sora font-bold text-sm text-navy m-0 ${
+                          isDisabled ? "line-through text-gray-500" : ""
+                        }`}
+                      >
+                        Règle {idx + 1} — {rule.description}
                       </p>
-                      {cas._valeurs_dict &&
-                        Object.keys(cas._valeurs_dict).length > 0 && (
-                          <div className="bg-gray-50 rounded-lg p-2 mb-2 text-xs">
-                            {Object.entries(cas._valeurs_dict).map(
-                              ([k, v]) => (
-                                <div
-                                  key={k}
-                                  className="flex justify-between py-0.5"
-                                >
-                                  <span className="text-gray-500 font-mono">
-                                    {k}
-                                  </span>
-                                  <span className="text-navy font-bold">
-                                    {String(v).slice(0, 30)}
-                                  </span>
-                                </div>
-                              )
-                            )}
+                      <p className="text-xs text-gray-500 mt-0.5 m-0">
+                        {isDisabled
+                          ? `${nCas} cas masqué${nCas > 1 ? "s" : ""}`
+                          : nCas === 0
+                          ? "Aucun cas détecté"
+                          : sev
+                          ? `${SEV_LABEL[sev]} · ${nCas} cas`
+                          : `${nCas} cas`}
+                      </p>
+                    </div>
+
+                    {/* Badge nb cas */}
+                    {hasCases && (
+                      <span
+                        className={`${sevStyle} px-2.5 py-1 rounded-md font-mono text-sm font-bold flex-shrink-0`}
+                        title={`${nCas} cas détectés`}
+                      >
+                        {nCas}
+                      </span>
+                    )}
+
+                    {/* Bouton voir details */}
+                    {hasCases && !isDisabled && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          toggleExpand(idx)
+                        }}
+                        className={`flex items-center gap-1 px-3 py-1.5 rounded-lg ${sevStyle} text-xs font-bold hover:shadow-sm transition-shadow whitespace-nowrap flex-shrink-0`}
+                      >
+                        {isOpen ? "Masquer" : "Voir détails"}
+                        {isOpen ? (
+                          <ChevronUp className="w-4 h-4" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4" />
+                        )}
+                      </button>
+                    )}
+
+                    {/* Toggle activer/desactiver la regle */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        toggleRule(idx)
+                      }}
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors flex-shrink-0 ${
+                        isDisabled
+                          ? "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                          : "bg-green-100 text-green-800 hover:bg-green-200"
+                      }`}
+                      title={
+                        isDisabled
+                          ? "Réactiver cette règle"
+                          : "Désactiver cette règle"
+                      }
+                    >
+                      {isDisabled ? (
+                        <PowerOff className="w-3.5 h-3.5" />
+                      ) : (
+                        <Power className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Detail : les cas concernes */}
+                  {isOpen && hasCases && !isDisabled && (
+                    <div className="border-t border-gray-200 bg-gray-50 p-4 slide-up">
+                      {/* Explications */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3">
+                        {rule.pourquoi && (
+                          <div className="bg-purple-50 rounded-lg p-2.5">
+                            <p className="text-xs text-purple-800 uppercase tracking-wider font-bold mb-1 m-0">
+                              Pourquoi
+                            </p>
+                            <p className="text-xs text-navy m-0">
+                              {rule.pourquoi}
+                            </p>
                           </div>
                         )}
-                      {cas._pourquoi && (
-                        <p className="text-xs text-gray-500 m-0 mb-1">
-                          <strong className="text-navy">Pourquoi :</strong>{" "}
-                          {cas._pourquoi}
-                        </p>
-                      )}
-                      {cas._action && (
-                        <p className="text-xs text-gray-500 m-0 mb-2">
-                          <strong className="text-navy">Action :</strong>{" "}
-                          {cas._action}
-                        </p>
-                      )}
-                      <div className="border-t border-gray-200 pt-2 text-xs text-navy font-semibold">
-                        <span className="text-gray-500 text-xs font-normal">
-                          Enquêteur :
-                        </span>{" "}
-                        {cas.Enqueteur}
+                        {rule.cause && (
+                          <div className="bg-orange-50 rounded-lg p-2.5">
+                            <p className="text-xs text-orange-800 uppercase tracking-wider font-bold mb-1 m-0">
+                              Cause probable
+                            </p>
+                            <p className="text-xs text-navy m-0">
+                              {rule.cause}
+                            </p>
+                          </div>
+                        )}
+                        {rule.action && (
+                          <div className="bg-green-50 rounded-lg p-2.5">
+                            <p className="text-xs text-green-800 uppercase tracking-wider font-bold mb-1 m-0">
+                              Action
+                            </p>
+                            <p className="text-xs text-navy m-0">
+                              {rule.action}
+                            </p>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
 
-              {/* Vue Tableau */}
-              {viewMode === "table" && (
-                <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto max-h-[600px]">
-                  <table className="w-full text-xs">
-                    <thead className="bg-gray-100 sticky top-0">
-                      <tr>
-                        {[
-                          "Cas N°",
-                          "Ligne",
-                          "Gravité",
-                          "Enquêteur",
-                          "Règle",
-                          "Colonnes",
-                          "Valeurs en cause",
-                          "Action",
-                        ].map((h) => (
-                          <th
-                            key={h}
-                            className="px-3 py-2.5 text-left font-bold text-navy whitespace-nowrap"
-                          >
-                            {h}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredCases.map((cas, i) => (
-                        <tr key={i} className="border-b border-gray-100">
-                          <td className="px-3 py-2 whitespace-nowrap">
-                            {i + 1}
-                          </td>
-                          <td className="px-3 py-2 whitespace-nowrap">
-                            {cas._index}
-                          </td>
-                          <td className="px-3 py-2 whitespace-nowrap">
-                            <span
-                              className={`badge ${SEV_BG[cas._severite]}`}
-                            >
-                              {{ high: "Haute", med: "Moy.", low: "Faible" }[
-                                cas._severite
-                              ]}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2 whitespace-nowrap">
-                            {cas.Enqueteur}
-                          </td>
-                          <td className="px-3 py-2 max-w-xs">{cas.Regle}</td>
-                          <td className="px-3 py-2 font-mono text-xs">
-                            {cas.Colonnes_concernees}
-                          </td>
-                          <td className="px-3 py-2 max-w-xs">
-                            {cas.Valeurs}
-                          </td>
-                          <td className="px-3 py-2 max-w-xs">
-                            {cas._action}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      <p className="font-bold text-navy text-xs mb-2 mt-2">
+                        Lignes concernées ({cases.length}) :
+                      </p>
+
+                      <div className="bg-white rounded-lg border border-gray-200 overflow-x-auto max-h-96">
+                        <table className="w-full text-xs">
+                          <thead className="bg-gray-100 sticky top-0">
+                            <tr>
+                              <th className="px-3 py-2 text-left font-bold text-navy whitespace-nowrap">
+                                Ligne
+                              </th>
+                              <th className="px-3 py-2 text-left font-bold text-navy whitespace-nowrap">
+                                Enquêteur
+                              </th>
+                              <th className="px-3 py-2 text-left font-bold text-navy">
+                                Valeurs en cause
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {cases.slice(0, 200).map((c, i) => (
+                              <tr key={i} className="border-b border-gray-100">
+                                <td className="px-3 py-2 whitespace-nowrap font-mono text-gray-600">
+                                  {c._index}
+                                </td>
+                                <td className="px-3 py-2 whitespace-nowrap">
+                                  {c.Enqueteur}
+                                </td>
+                                <td className="px-3 py-2">
+                                  {c._valeurs_dict &&
+                                  Object.keys(c._valeurs_dict).length > 0 ? (
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {Object.entries(c._valeurs_dict).map(
+                                        ([k, v]) => (
+                                          <span
+                                            key={k}
+                                            className="bg-gray-100 rounded px-2 py-0.5 text-xs"
+                                          >
+                                            <span className="text-gray-500 font-mono">
+                                              {k}=
+                                            </span>
+                                            <span className="text-navy font-semibold ml-0.5">
+                                              {String(v).slice(0, 40)}
+                                            </span>
+                                          </span>
+                                        )
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <span className="text-gray-400 italic">
+                                      {c.Valeurs || "—"}
+                                    </span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      {cases.length > 200 && (
+                        <p className="text-xs text-gray-500 mt-2 italic">
+                          Affichage limité aux 200 premiers cas. Exportez en Excel pour la liste complète.
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
-              )}
-            </>
-          )}
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ====================================================================
+//  Composant : chronometre + etapes pendant la generation IA
+// ====================================================================
+
+function GenerationProgress({ apiLabel }) {
+  const [elapsed, setElapsed] = useState(0)
+
+  useEffect(() => {
+    const t = setInterval(() => setElapsed((s) => s + 1), 1000)
+    return () => clearInterval(t)
+  }, [])
+
+  const mins = Math.floor(elapsed / 60)
+  const secs = elapsed % 60
+  const display = mins > 0
+    ? `${mins} min ${secs.toString().padStart(2, "0")}s`
+    : `${secs}s`
+
+  // Etape pseudo-dynamique selon le temps ecoule
+  // (le backend ne stream pas en temps reel, on simule visuellement)
+  let stage, stageMsg
+  if (elapsed < 5) {
+    stage = "init"
+    stageMsg = "Préparation des variables..."
+  } else if (elapsed < 30) {
+    stage = "plan"
+    stageMsg = "L'IA analyse le contexte et planifie les règles..."
+  } else if (elapsed < 120) {
+    stage = "generation"
+    stageMsg = "Génération des règles QC en cours (peut prendre 1-3 lots)..."
+  } else if (elapsed < 240) {
+    stage = "long"
+    stageMsg = "Analyse plus longue que prévu - fichier volumineux. Patience..."
+  } else {
+    stage = "very_long"
+    stageMsg = "Analyse très longue. Si > 8 min, essayez de relancer avec API 2 (plus rapide)."
+  }
+
+  return (
+    <div className="mt-4 bg-gradient-to-br from-navy to-navy-deep text-white rounded-2xl p-5 shadow-lg">
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
+        <div className="flex items-center gap-3">
+          <Loader2 className="w-6 h-6 animate-spin text-gold" />
+          <div>
+            <p className="font-sora font-bold m-0">Moteur IA actif : {apiLabel}</p>
+            <p className="text-xs text-gold m-0 mt-1">{stageMsg}</p>
+          </div>
+        </div>
+        <div className="text-right">
+          <p className="font-mono text-2xl font-bold text-gold m-0">{display}</p>
+          <p className="text-xs text-white/60 m-0">Temps écoulé</p>
+        </div>
+      </div>
+
+      {/* Etapes visuelles */}
+      <div className="flex gap-1.5 mt-3">
+        {["init", "plan", "generation", "long"].map((s) => {
+          const stagesOrder = ["init", "plan", "generation", "long", "very_long"]
+          const currIdx = stagesOrder.indexOf(stage)
+          const sIdx = stagesOrder.indexOf(s)
+          const active = sIdx <= currIdx
+          return (
+            <div
+              key={s}
+              className={`flex-1 h-1.5 rounded-full transition-all ${
+                active ? "bg-gold" : "bg-white/20"
+              }`}
+            />
+          )
+        })}
+      </div>
+
+      {elapsed > 180 && (
+        <div className="mt-3 bg-white/10 rounded-lg p-3 flex items-start gap-2">
+          <Zap className="w-4 h-4 text-gold flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-white/90 m-0">
+            <strong>Astuce :</strong> Pour les très gros fichiers (300+ colonnes),
+            l'API 2 est souvent 2x à 3x plus rapide. Si vous relancez,
+            changez le moteur à l'étape 1.
+          </p>
         </div>
       )}
     </div>

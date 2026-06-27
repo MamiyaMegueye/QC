@@ -1,9 +1,10 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useStore } from "../../store/useStore"
 import { api } from "../../api/client"
 import {
   FileText, Download, Loader2, ArrowLeft, Sparkles,
   CheckCircle2, RefreshCw, Pencil, Check, X, AlertCircle,
+  Eye, EyeOff, AlertTriangle, BarChart3,
 } from "lucide-react"
 
 // ====================================================================
@@ -217,6 +218,23 @@ export default function Step4AnalyticalReport() {
   const [progressLog, setProgressLog] = useState([])
   const [error, setError] = useState(null)
   const [content, setContent] = useState(null) // contenu du rapport apres preview
+  const [analysisScope, setAnalysisScope] = useState(null)
+  const [scopeExpanded, setScopeExpanded] = useState(false)
+  const [scopeLoading, setScopeLoading] = useState(false)
+
+  // Charger le perimetre d'analyse au montage (pour voir quelles variables
+  // seront effectivement analysees AVANT de lancer la generation)
+  useEffect(() => {
+    if (!store.sessionId) return
+    setScopeLoading(true)
+    fetch(`${import.meta.env.VITE_API_URL || "http://localhost:8000"}/api/session/${store.sessionId}/analysis-scope`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data) setAnalysisScope(data)
+      })
+      .catch(() => {})
+      .finally(() => setScopeLoading(false))
+  }, [store.sessionId])
 
   if (!store.sessionId) {
     return (
@@ -328,16 +346,164 @@ export default function Step4AnalyticalReport() {
           </div>
         </div>
 
+        {/* === PERIMETRE DU RAPPORT (transparence pour l'utilisateur) === */}
+        {scopeLoading && (
+          <div className="bg-gray-50 rounded-2xl p-4 mb-6 flex items-center gap-3 text-gray-600">
+            <Loader2 className="w-5 h-5 animate-spin" />
+            <span className="text-sm">Calcul du perimetre d'analyse...</span>
+          </div>
+        )}
+
+        {analysisScope && (
+          <div className="bg-white border border-gray-200 rounded-2xl mb-6 overflow-hidden">
+            <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-4 border-b border-gray-200">
+              <div className="flex items-center gap-3 mb-2">
+                <BarChart3 className="w-6 h-6 text-navy" />
+                <h4 className="font-sora font-bold text-navy m-0 text-base">
+                  Perimetre du rapport client
+                </h4>
+              </div>
+              <p className="text-sm text-gray-700 m-0">
+                Le rapport est destine au <strong>commanditaire de l'enquete</strong> 
+                {" "}(l'entreprise / l'organisation qui a commande la collecte). Seules les
+                variables a valeur metier seront analysees. Les colonnes techniques de pilotage
+                interne SISTA (identifiant, enqueteur, horodatages, GPS, commentaires libres,
+                contacts) sont automatiquement ecartees.
+              </p>
+            </div>
+
+            <div className="p-4">
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                <div className="text-center bg-green-50 border-l-4 border-green-500 rounded-r-xl p-3">
+                  <p className="font-mono text-2xl font-bold text-green-700 m-0">
+                    {analysisScope.n_retained}
+                  </p>
+                  <p className="text-xs uppercase tracking-wider font-bold text-green-800 mt-1 m-0">
+                    Retenues
+                  </p>
+                </div>
+                <div className="text-center bg-gray-50 border-l-4 border-gray-400 rounded-r-xl p-3">
+                  <p className="font-mono text-2xl font-bold text-gray-700 m-0">
+                    {analysisScope.n_excluded}
+                  </p>
+                  <p className="text-xs uppercase tracking-wider font-bold text-gray-600 mt-1 m-0">
+                    Ecartees
+                  </p>
+                </div>
+                <div className="text-center bg-blue-50 border-l-4 border-blue-500 rounded-r-xl p-3">
+                  <p className="font-mono text-2xl font-bold text-blue-700 m-0">
+                    {analysisScope.n_total}
+                  </p>
+                  <p className="text-xs uppercase tracking-wider font-bold text-blue-800 mt-1 m-0">
+                    Total
+                  </p>
+                </div>
+              </div>
+
+              {/* Alerte si vraiment peu de variables */}
+              {analysisScope.n_retained < 3 && (
+                <div className="bg-amber-50 border-l-4 border-amber-500 rounded-r-xl p-3 mb-3 flex items-start gap-2">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div className="text-sm">
+                    <p className="font-bold text-amber-900 m-0">
+                      Tres peu de variables analysables
+                    </p>
+                    <p className="text-amber-800 text-xs mt-1 m-0">
+                      Le rapport client sera limite avec seulement {analysisScope.n_retained} variable(s)
+                      retenue(s). Verifiez que votre fichier contient bien des variables metier
+                      (sociodemographiques, opinions, comportements) et pas uniquement des
+                      metadonnees de collecte.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={() => setScopeExpanded(!scopeExpanded)}
+                className="w-full flex items-center justify-between bg-gray-50 hover:bg-gray-100 rounded-xl p-3 text-sm font-bold text-navy transition-colors"
+              >
+                <span className="flex items-center gap-2">
+                  {scopeExpanded ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {scopeExpanded ? "Masquer" : "Voir le detail"} des variables retenues et ecartees
+                </span>
+                <span className="text-xs text-gray-500 font-normal">
+                  ({analysisScope.n_retained} OK · {analysisScope.n_excluded} ecartees)
+                </span>
+              </button>
+
+              {scopeExpanded && (
+                <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 slide-up">
+                  {/* Variables retenues */}
+                  <div>
+                    <p className="text-xs font-bold text-green-800 uppercase tracking-wider mb-2 m-0">
+                      Variables analysees ({analysisScope.n_retained})
+                    </p>
+                    <div className="bg-green-50 border border-green-200 rounded-xl p-2 max-h-72 overflow-y-auto">
+                      {analysisScope.retained.length === 0 ? (
+                        <p className="text-xs text-gray-500 italic m-2">Aucune</p>
+                      ) : (
+                        analysisScope.retained.map((v) => (
+                          <div
+                            key={v.name}
+                            className="bg-white rounded-md px-2 py-1.5 mb-1 last:mb-0 text-xs"
+                          >
+                            <p className="font-bold text-navy m-0">{v.name}</p>
+                            <p className="text-gray-500 m-0 mt-0.5">
+                              {v.type} · {v.fill_rate}% rempli · {v.uniques} valeur(s) unique(s)
+                            </p>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Variables exclues */}
+                  <div>
+                    <p className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2 m-0">
+                      Variables ecartees ({analysisScope.n_excluded})
+                    </p>
+                    <div className="bg-gray-50 border border-gray-200 rounded-xl p-2 max-h-72 overflow-y-auto">
+                      {analysisScope.excluded.length === 0 ? (
+                        <p className="text-xs text-gray-500 italic m-2">Aucune</p>
+                      ) : (
+                        analysisScope.excluded.map((v) => (
+                          <div
+                            key={v.name}
+                            className="bg-white rounded-md px-2 py-1.5 mb-1 last:mb-0 text-xs"
+                          >
+                            <p className="font-bold text-gray-700 m-0 line-through">
+                              {v.name}
+                            </p>
+                            <p className="text-gray-500 m-0 mt-0.5 italic">
+                              {v.reason}
+                            </p>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         <button
           onClick={handleGenerate}
+          disabled={analysisScope && analysisScope.n_retained === 0}
           className="w-full py-5 rounded-2xl font-sora font-bold text-lg
             flex items-center justify-center gap-3 transition-all
             bg-navy hover:bg-navy-deep text-white shadow-lg hover:shadow-xl
-            transform hover:-translate-y-0.5"
+            transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
         >
           <Sparkles className="w-6 h-6" />
           Generer l'apercu du rapport
         </button>
+        {analysisScope && analysisScope.n_retained === 0 && (
+          <p className="text-xs text-red-700 text-center mt-2">
+            Aucune variable metier analysable. Verifiez le fichier ou le mapping des colonnes-cles.
+          </p>
+        )}
         <p className="text-xs text-gray-500 text-center mt-3">
           La generation peut prendre 30 a 90 secondes
         </p>

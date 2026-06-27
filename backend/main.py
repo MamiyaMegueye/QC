@@ -14,6 +14,11 @@ Endpoints :
   POST /api/session/{id}/generate-report-preview          -> apercu du rapport analytique (JSON)
   POST /api/session/{id}/download-report                  -> telecharge le .docx
   DELETE /api/session/{id}                                -> libere session
+
+v1.4.0 (recommandations SISTA) :
+  - column_mapping inclut maintenant explicitement l'identifiant unique
+  - apply_id_declaration() est appele pour forcer le type "identifiant"
+    sur la colonne declaree et retyper les autres
 """
 
 from __future__ import annotations
@@ -38,7 +43,7 @@ except ImportError:
     pass
 
 from core.loader import load_file
-from core.profiler import profile_dataset, apply_overrides
+from core.profiler import profile_dataset, apply_overrides, apply_id_declaration
 from core.qc_basic import (
     run_basic_qc,
     build_enqueteur_summary,
@@ -47,11 +52,12 @@ from core.qc_basic import (
 )
 from core import ai_agent
 from core import analytical_report
+from core import qc_report
 
 app = FastAPI(
     title="SISTA QC API",
     description="API REST pour le moteur de Controle Qualite SISTA",
-    version="1.3.0",
+    version="1.6.0",
 )
 
 ALLOWED_ORIGINS = [
@@ -115,6 +121,24 @@ class DownloadReportRequest(BaseModel):
     report_content: Optional[dict] = None
 
 
+class ValidationItem(BaseModel):
+    """Decision de validation pour une regle QC (basique ou IA)."""
+    status: str   # 'confirmed' | 'false_positive' | 'corrected' | 'pending'
+    comment: str = ""
+
+
+class SaveValidationsRequest(BaseModel):
+    """Sauvegarde en masse des decisions de validation."""
+    validations: dict   # { 'basic:doublons_lignes': {status, comment}, 'ai:0': {...} }
+    metadata: Optional[dict] = None   # { responsable_qc, fonction, date_validation, ... }
+
+
+class GenerateQcReportRequest(BaseModel):
+    """Genere le rapport de controle qualite formel."""
+    metadata: dict = {}   # { responsable_qc, fonction, date_validation, organisation,
+                          #   observations_generales }
+
+
 def _save_upload(file: UploadFile) -> str:
     suffix = os.path.splitext(file.filename)[1]
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
@@ -145,7 +169,7 @@ def _resolve_api_key(api: str, key_from_request: str) -> str:
 
 @app.get("/")
 def root():
-    return {"name": "SISTA QC API", "status": "online", "version": "1.3.0"}
+    return {"name": "SISTA QC API", "status": "online", "version": "1.4.0"}
 
 
 @app.get("/api/health")
@@ -196,6 +220,7 @@ async def preview_columns(
             "columns": cols,
             "auto_mapping": mp_clean,
             "n_columns": len(cols),
+            "n_rows": int(loaded.df.shape[0]),
             "profile": profile,
         }
     except Exception as e:
@@ -244,8 +269,7 @@ async def analyze(
         profile = profile_dataset(loaded)
 
         # ───────────────────────────────────────────────────────────────
-        # Appliquer les overrides utilisateur (Step1 -- revue variables)
-        # avant de lancer QC, AI, etc.
+        # Appliquer les overrides utilisateur sur le profil
         # ───────────────────────────────────────────────────────────────
         if variable_overrides:
             try:
@@ -271,6 +295,14 @@ async def analyze(
         auto_mp = auto_map(loaded.df.columns)
         final_mp = {**auto_mp, **user_mp}
 
+        # ───────────────────────────────────────────────────────────────
+        # Recommandation SISTA : si l'utilisateur a declare l'ID,
+        # on force ce type et on retype les autres "identifiants" auto.
+        # ───────────────────────────────────────────────────────────────
+        declared_id = user_mp.get("id", "")
+        if declared_id:
+            profile = apply_id_declaration(profile, declared_id)
+
         results, mp = run_basic_qc(loaded, profile, mp=final_mp, params=params)
         stats = global_stats(profile, results)
 
@@ -283,11 +315,15 @@ async def analyze(
             "params": params,
             "form_content": form_content,
             "filename": data_file.filename,
+            "declared_id_col": declared_id,
             "ai_results": None,
             "ai_rules": None,
             "ai_comment": None,
             "ai_metrics": None,
             "report_content": None,
+            # Point 5 SISTA : workflow de validation + rapport QC
+            "validations": {},      # { 'basic:doublons_lignes': {status, comment}, ... }
+            "qc_metadata": {},      # { responsable_qc, fonction, date_validation, ... }
         })
 
         preview = loaded.df.head(20).fillna("").astype(str).to_dict(orient="records")
@@ -346,6 +382,7 @@ def generate_rules(req: GenerateRulesRequest):
             form_content=req.form_content or sess["form_content"],
             df=sess["loaded"].df,
             progress_callback=progress_cb,
+            mp=sess["mp"],
         )
         ai_res = ai_agent.run_rules(sess["loaded"].df, rules, sess["mp"])
 
@@ -466,6 +503,22 @@ def recompute_basic(session_id: str, duree_min: int = Form(18),
     return {"ok": True, "results": results, "stats": stats, "mp": mp}
 
 
+@app.get("/api/session/{session_id}/analysis-scope")
+def get_analysis_scope(session_id: str):
+    """Retourne le perimetre d'analyse du rapport client (variables retenues
+    vs exclues, avec raisons). Endpoint leger sans appel IA, sert a afficher
+    le perimetre AVANT de lancer la generation du rapport analytique.
+    """
+    sess = _get_session(session_id)
+    try:
+        scope = analytical_report.compute_analysis_scope(
+            sess["profile"], sess.get("mp")
+        )
+        return {"ok": True, **scope}
+    except Exception as e:
+        raise HTTPException(500, f"Erreur de calcul du perimetre : {_clean_error_msg(e)}")
+
+
 @app.post("/api/session/{session_id}/generate-report-preview")
 def generate_report_preview(session_id: str, req: GenerateReportPreviewRequest):
     sess = _get_session(session_id)
@@ -504,6 +557,9 @@ def generate_report_preview(session_id: str, req: GenerateReportPreviewRequest):
             qc_results=sess.get("results", []),
             qc_stats=qc_stats,
             progress_cb=progress_cb,
+            # Mapping des colonnes-cles : exclut les variables techniques
+            # (identifiant, enqueteur, GPS, horodatages) du rapport client
+            mp=sess.get("mp"),
         )
 
         sess["report_content"] = content
@@ -537,6 +593,114 @@ def download_report(session_id: str, req: DownloadReportRequest):
         )
     except Exception as e:
         raise HTTPException(500, f"Erreur de composition du Word : {_clean_error_msg(e)}")
+
+
+@app.get("/api/session/{session_id}/validations")
+def get_validations(session_id: str):
+    """Recupere les decisions de validation actuelles + metadonnees QC."""
+    sess = _get_session(session_id)
+    return {
+        "validations": sess.get("validations", {}),
+        "metadata":    sess.get("qc_metadata", {}),
+    }
+
+
+@app.post("/api/session/{session_id}/validations")
+def save_validations(session_id: str, req: SaveValidationsRequest):
+    """Sauvegarde les decisions de validation et les metadonnees du responsable QC.
+
+    Cet endpoint est appele depuis le frontend a chaque modification ou en bloc
+    lors du clic sur 'Enregistrer mes validations'.
+    """
+    sess = _get_session(session_id)
+
+    # Validation legere du contenu
+    valid_statuses = {"confirmed", "false_positive", "corrected", "pending"}
+    cleaned = {}
+    for item_id, val in (req.validations or {}).items():
+        if not isinstance(val, dict):
+            continue
+        status = val.get("status", "pending")
+        if status not in valid_statuses:
+            status = "pending"
+        cleaned[str(item_id)] = {
+            "status":  status,
+            "comment": str(val.get("comment", "") or "")[:1000],
+        }
+
+    sess["validations"] = cleaned
+    if req.metadata is not None:
+        # Fusion avec l'existant pour ne pas tout perdre si on envoie partiel
+        existing = sess.get("qc_metadata", {})
+        existing.update({k: v for k, v in req.metadata.items() if v is not None})
+        sess["qc_metadata"] = existing
+
+    return {
+        "ok": True,
+        "n_validations": len(cleaned),
+        "metadata": sess.get("qc_metadata", {}),
+    }
+
+
+@app.post("/api/session/{session_id}/qc-report")
+def generate_qc_report_endpoint(session_id: str, req: GenerateQcReportRequest):
+    """Genere le rapport de Controle Qualite formel (.docx).
+
+    Le rapport inclut :
+      - synthese executive avec compteurs et taux de qualite
+      - detail des regles QC basiques avec leur statut de validation
+      - detail des regles QC IA avec leur statut de validation
+      - bilan par enqueteur (filtre sur anomalies confirmees)
+      - recommandations / actions a mener
+      - page de signature
+
+    Les validations utilisees sont celles deja sauvegardees en session
+    via POST /api/session/{id}/validations.
+    """
+    sess = _get_session(session_id)
+
+    # On fusionne les metadonnees envoyees dans la requete avec celles
+    # deja stockees (la requete a la priorite)
+    metadata = dict(sess.get("qc_metadata", {}))
+    for k, v in (req.metadata or {}).items():
+        if v is not None:
+            metadata[k] = v
+    sess["qc_metadata"] = metadata
+
+    try:
+        n_observations = sess["profile"]["summary"]["n_rows"]
+    except Exception:
+        n_observations = 0
+
+    # Survey type s'il est disponible (passe a /api/analyze ou /preview-columns)
+    survey_type = ""
+    try:
+        survey_type = sess.get("survey_context", {}).get("type", "")
+    except Exception:
+        pass
+
+    try:
+        docx_bytes = qc_report.build_qc_report(
+            filename       = sess["filename"],
+            n_observations = n_observations,
+            qc_results     = sess.get("results", []),
+            ai_rules       = sess.get("ai_rules"),
+            ai_result      = sess.get("ai_results"),
+            validations    = sess.get("validations", {}),
+            metadata       = metadata,
+            survey_type    = survey_type,
+        )
+
+        base = sess["filename"].rsplit(".", 1)[0]
+        out_filename = f"{base}_rapport_qc.docx"
+
+        return StreamingResponse(
+            io.BytesIO(docx_bytes),
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={"Content-Disposition": f'attachment; filename="{out_filename}"'}
+        )
+    except Exception as e:
+        raise HTTPException(500, f"Erreur de generation du rapport QC : {_clean_error_msg(e)}")
 
 
 @app.delete("/api/session/{session_id}")

@@ -11,10 +11,17 @@ Produit pour chaque variable :
 Et un resume global :
   - nombre total de variables
   - nombre de variables numeriques, categorielles, texte, date
-  - nombre de lignes
+  - nombre d'observations
 
-v2 : ajout de apply_overrides() pour permettre la correction utilisateur
-     du type / label / ignore avant le QC.
+v3 (recommandations SISTA) :
+  - Le typage "identifiant" est desormais STRICT : il exige un mot-cle
+    explicite dans le nom (id, code, uuid, ref, identif). On ne classe
+    plus en "identifiant" toute variable a 100% d'uniques (ex : commentaires
+    texte libre etaient mal classes).
+  - Ajout de apply_id_declaration() : permet a l'utilisateur de declarer
+    explicitement la colonne identifiant unique (responsabilite SISTA).
+    Toute autre colonne auto-detectee comme "identifiant" est alors
+    retypee selon son contenu reel.
 """
 
 import pandas as pd
@@ -23,6 +30,36 @@ import re
 
 
 VALID_TYPES = {"numérique", "catégorielle", "texte", "date", "identifiant", "vide"}
+
+# Mots-cles strictement reconnus comme indicateurs d'identifiant.
+# On utilise des separateurs explicites (debut, fin, _, -, espace) plutot
+# que \b car en regex Python "_" est considere comme un caractere "word",
+# ce qui empechait \buuid\b de matcher "uuid_kobo".
+_ID_KEYWORDS = r"(?:id|ids|uuid|guid|ref|identif|identifier|identifiant|identifiants|code|codigo)"
+
+# Pattern principal (insensible a la casse) : mot-cle entoure de separateurs
+_ID_PATTERN_CI = re.compile(
+    rf"(?:^|[_\-\s]){_ID_KEYWORDS}(?:$|[_\-\s])",
+    re.IGNORECASE,
+)
+# Pattern CamelCase (sensible a la casse) :
+#   - "IDmenage", "IDClient", "UUIDClient" -> matche ^ID + lettre suivante
+#   - "menageID", "clientCode", "userRef"  -> matche minuscule + suffixe Pascal
+# Note : ce pattern, combine au filtre d'unicite >=95%, evite les faux positifs
+# comme "ideal" ou "identite" qui ne sont jamais 100% uniques en pratique.
+_ID_PATTERN_CAMEL = re.compile(
+    r"^(?:ID|UUID|GUID)[A-Za-z]"
+    r"|[a-z](?:ID|UUID|GUID|Code|Ref)$"
+)
+
+
+def _is_id_name(name):
+    """True si le nom de variable contient un mot-cle d'identifiant."""
+    return bool(_ID_PATTERN_CI.search(name) or _ID_PATTERN_CAMEL.search(name))
+
+
+# Expose ID_NAME_PATTERN pour la retrocompatibilite (utilise dans les tests)
+ID_NAME_PATTERN = _ID_PATTERN_CI
 
 
 def _try_numeric(series):
@@ -47,7 +84,17 @@ def _try_datetime(series):
 
 
 def detect_type(series, name="", n_rows=0):
-    """Detecte le type d'une variable."""
+    """
+    Detecte le type d'une variable.
+
+    Ordre des verifications :
+      1. vide
+      2. identifiant (STRICT : nom explicite + forte unicite)
+      3. date
+      4. numerique (vs categorielle si peu d'uniques)
+      5. categorielle (peu d'uniques)
+      6. texte (par defaut)
+    """
     non_null = series.dropna()
     n = len(non_null)
     if n == 0:
@@ -55,9 +102,15 @@ def detect_type(series, name="", n_rows=0):
 
     uniques = non_null.astype(str).nunique()
 
-    if uniques >= 0.9 * n and (re.search(r"id|code|num|uuid|ref", str(name), re.I) or uniques == n):
-        num, ratio = _try_numeric(non_null)
-        if ratio < 0.95:
+    # Identifiant : on EXIGE le mot-cle explicite dans le nom
+    # ET un taux d'unicite tres eleve (>=95%). On ne se fie plus a uniques==n seul
+    # (un champ "commentaire" peut tres bien avoir 100% d'uniques sans etre un ID).
+    # _is_id_name() couvre les deux conventions : "id_menage" (snake_case) ET
+    # "IDmenage" (camelCase / PascalCase).
+    if _is_id_name(str(name)) and uniques >= 0.95 * n:
+        # Verifier que ce n'est pas un numerique pur (sinon, c'est plutot une mesure)
+        _num, ratio = _try_numeric(non_null)
+        if ratio < 0.95 or uniques == n:
             return "identifiant"
 
     if _try_datetime(non_null) > 0.7:
@@ -132,16 +185,21 @@ def profile_dataset(loaded):
             n_rows=n_rows,
         ))
 
+    return _build_profile(variables, n_rows, df.shape[1])
+
+
+def _build_profile(variables, n_rows, n_vars_raw):
+    """Construit la structure {summary, variables} a partir d'une liste."""
     type_counts = {}
     for v in variables:
         type_counts[v["type"]] = type_counts.get(v["type"], 0) + 1
 
-    total_cells = n_rows * df.shape[1] if df.shape[1] else 0
+    total_cells = n_rows * n_vars_raw if n_vars_raw else 0
     filled_cells = sum(v["n_filled"] for v in variables)
 
     summary = {
         "n_rows": n_rows,
-        "n_vars": df.shape[1],
+        "n_vars": len(variables),
         "n_numeric": type_counts.get("numérique", 0),
         "n_categorical": type_counts.get("catégorielle", 0),
         "n_text": type_counts.get("texte", 0),
@@ -156,8 +214,7 @@ def profile_dataset(loaded):
 
 
 # ----------------------------------------------------------------------
-#  Application des overrides utilisateur (laissee en place pour
-#  compatibilite backend, meme si l'UI ne les envoie plus)
+#  Application des overrides utilisateur
 # ----------------------------------------------------------------------
 
 def apply_overrides(profile, overrides):
@@ -192,23 +249,64 @@ def apply_overrides(profile, overrides):
         if not ov.get("ignore"):
             kept.append(var)
 
-    profile["variables"] = kept
+    n_rows = profile["summary"]["n_rows"]
+    return _build_profile(kept, n_rows, len(kept))
 
-    type_counts = {}
-    for v in kept:
-        type_counts[v["type"]] = type_counts.get(v["type"], 0) + 1
 
-    s = profile["summary"]
-    profile["summary"] = {
-        **s,
-        "n_vars": len(kept),
-        "n_numeric": type_counts.get("numérique", 0),
-        "n_categorical": type_counts.get("catégorielle", 0),
-        "n_text": type_counts.get("texte", 0),
-        "n_date": type_counts.get("date", 0),
-        "n_id": type_counts.get("identifiant", 0),
-        "n_empty": type_counts.get("vide", 0),
-        "type_counts": type_counts,
-    }
+def apply_id_declaration(profile, declared_id_col):
+    """
+    Applique la declaration utilisateur de l'identifiant unique.
 
-    return profile
+    Recommandation SISTA : la colonne identifiant doit etre choisie
+    explicitement par l'equipe metier, jamais devinee aveuglement.
+
+    Effets :
+      - La colonne declaree est forcee au type "identifiant"
+      - Toute autre colonne auto-detectee comme "identifiant" est retypee
+        selon son contenu (texte par defaut, numerique si pertinent)
+
+    Args:
+        profile : profil {summary, variables}
+        declared_id_col : nom de la colonne identifiant (str) ou "" / None
+
+    Retourne le profil mis a jour.
+    """
+    if not declared_id_col:
+        return profile
+
+    declared_id_col = str(declared_id_col).strip()
+    if not declared_id_col:
+        return profile
+
+    found = False
+    for var in profile["variables"]:
+        if var["name"] == declared_id_col:
+            var["type"] = "identifiant"
+            var["_id_declared"] = True
+            var["stats"] = {}
+            found = True
+        elif var["type"] == "identifiant":
+            # Retyper : si les valeurs sont majoritairement numeriques, "numerique"
+            # sinon "texte" par defaut.
+            # On n'a pas la serie ici, on se fie aux exemples + uniques
+            examples = var.get("examples", [])
+            is_numeric_like = sum(
+                1 for e in examples
+                if str(e).replace(".", "").replace(",", "").replace("-", "").isdigit()
+            ) >= max(1, len(examples) // 2)
+
+            if is_numeric_like:
+                var["type"] = "numérique"
+            elif var["uniques"] <= max(20, 0.05 * max(var["n_filled"], 1)):
+                var["type"] = "catégorielle"
+            else:
+                var["type"] = "texte"
+            var["_id_retyped"] = True
+
+    if not found:
+        # La colonne declaree n'a pas ete trouvee dans le profil
+        # (cas rare : variable filtree par overrides). On loggue seulement.
+        print(f"[apply_id_declaration] colonne '{declared_id_col}' introuvable dans le profil")
+
+    n_rows = profile["summary"]["n_rows"]
+    return _build_profile(profile["variables"], n_rows, len(profile["variables"]))

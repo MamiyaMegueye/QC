@@ -8,6 +8,8 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  Eye,
+  EyeOff,
 } from "lucide-react"
 
 const SEV_STYLES = {
@@ -63,14 +65,26 @@ export default function QcBasicTab() {
   const n_low = results.filter((r) => r.severite === "low").length
   const n_ok = results.filter((r) => r.severite === "ok").length
 
+  // Indices des tests qui ont des cas a afficher (les seuls qu'on deplie)
+  const expandableIdx = sortedResults
+    .map((r, i) => (r.severite !== "ok" && r.n_cas > 0 ? i : null))
+    .filter((i) => i !== null)
+
+  const allExpanded =
+    expandableIdx.length > 0 &&
+    expandableIdx.every((i) => expanded.has(i))
+
+  const expandAll = () => setExpanded(new Set(expandableIdx))
+  const collapseAll = () => setExpanded(new Set())
+
   return (
     <div>
       {/* Metriques globales */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
         <MetricCard
           variant="navy"
-          value={stats?.questionnaires || 0}
-          label="Questionnaires"
+          value={stats?.observations ?? stats?.questionnaires ?? 0}
+          label="Observations"
         />
         <MetricCard variant="red" value={stats?.incoherences || 0} label="Incohérences" />
         <MetricCard variant="blue" value={stats?.tests || 0} label="Tests" />
@@ -117,50 +131,103 @@ export default function QcBasicTab() {
         </div>
       </div>
 
-      <h5 className="font-sora font-bold text-navy mb-3">
-        Détail des tests exécutés
-      </h5>
+      {/* Header avec actions globales d'agregation */}
+      <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+        <h5 className="font-sora font-bold text-navy m-0">
+          Anomalies regroupées par type
+        </h5>
+        {expandableIdx.length > 0 && (
+          <div className="flex gap-2">
+            <button
+              onClick={expandAll}
+              disabled={allExpanded}
+              className="text-xs flex items-center gap-1 px-3 py-1.5 rounded-lg bg-navy text-white hover:bg-navy-deep disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              <Eye className="w-3.5 h-3.5" />
+              Tout déplier
+            </button>
+            <button
+              onClick={collapseAll}
+              disabled={expanded.size === 0}
+              className="text-xs flex items-center gap-1 px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              <EyeOff className="w-3.5 h-3.5" />
+              Tout replier
+            </button>
+          </div>
+        )}
+      </div>
 
       <div className="space-y-2">
         {sortedResults.map((r, idx) => {
           const style = SEV_STYLES[r.severite] || SEV_STYLES.ok
           const Icon = style.icon
           const isOpen = expanded.has(idx)
+          const hasDetails = r.severite !== "ok" && r.n_cas > 0
 
           return (
             <div key={idx}>
               <div
-                className={`${style.bg} border-l-4 ${style.border} rounded-r-xl p-3 px-4 flex items-center gap-3 cursor-pointer hover:shadow-md transition-shadow`}
-                onClick={() => toggle(idx)}
+                className={`${style.bg} border-l-4 ${style.border} rounded-r-xl p-3 px-4 flex items-center gap-3 ${
+                  hasDetails ? "cursor-pointer hover:shadow-md" : ""
+                } transition-shadow`}
+                onClick={() => hasDetails && toggle(idx)}
               >
                 <div
                   className={`bg-white rounded-full w-9 h-9 flex items-center justify-center ${style.text} flex-shrink-0 shadow-sm`}
                 >
                   <Icon className="w-5 h-5" />
                 </div>
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <p
-                    className={`font-sora font-bold text-sm ${style.text} m-0`}
+                    className={`font-sora font-bold text-sm ${style.text} m-0 truncate`}
                   >
                     {r.titre}
                   </p>
                   <p className={`text-xs ${style.text} opacity-80 mt-0.5 m-0`}>
-                    {r.n_cas} cas détectés · Cliquez pour voir les détails
+                    {r.severite === "ok"
+                      ? "Aucune anomalie détectée"
+                      : `${r.n_cas} cas`}
                   </p>
                 </div>
-                <span
-                  className={`bg-white ${style.text} px-3 py-1 rounded-md font-sora text-xs font-bold tracking-wider shadow-sm`}
-                >
-                  {style.label}
-                </span>
-                {isOpen ? (
-                  <ChevronUp className={`w-5 h-5 ${style.text}`} />
-                ) : (
-                  <ChevronDown className={`w-5 h-5 ${style.text}`} />
+
+                {/* Badge nb cas + gravite */}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {r.severite !== "ok" && (
+                    <span
+                      className={`bg-white ${style.text} px-2.5 py-1 rounded-md font-mono text-sm font-bold shadow-sm`}
+                      title={`${r.n_cas} cas détectés`}
+                    >
+                      {r.n_cas}
+                    </span>
+                  )}
+                  <span
+                    className={`bg-white ${style.text} px-3 py-1 rounded-md font-sora text-xs font-bold tracking-wider shadow-sm hidden sm:inline`}
+                  >
+                    {style.label}
+                  </span>
+                </div>
+
+                {/* Bouton voir details */}
+                {hasDetails && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      toggle(idx)
+                    }}
+                    className={`flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white ${style.text} text-xs font-bold shadow-sm hover:shadow-md transition-shadow whitespace-nowrap`}
+                  >
+                    {isOpen ? "Masquer" : "Voir détails"}
+                    {isOpen ? (
+                      <ChevronUp className="w-4 h-4" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4" />
+                    )}
+                  </button>
                 )}
               </div>
 
-              {isOpen && (
+              {isOpen && hasDetails && (
                 <div className="bg-white border border-gray-200 border-t-0 rounded-b-xl p-4 -mt-px slide-up">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
                     <div className="bg-purple-50 rounded-lg p-3">
@@ -186,7 +253,8 @@ export default function QcBasicTab() {
                   {r.lignes && r.lignes.length > 0 && (
                     <div className="mt-3">
                       <p className="font-bold text-navy text-sm mb-2">
-                        Cas détectés :
+                        Lignes concernées ({r.lignes.length}
+                        {r.lignes.length >= 200 ? "+ (limité à 200)" : ""}) :
                       </p>
                       <div className="overflow-x-auto bg-gray-50 rounded-lg max-h-72">
                         <table className="w-full text-xs">
@@ -230,6 +298,11 @@ export default function QcBasicTab() {
                           </tbody>
                         </table>
                       </div>
+                      {r.lignes.length > 100 && (
+                        <p className="text-xs text-gray-500 mt-1 italic">
+                          Affichage limité aux 100 premières lignes. Exportez en Excel pour la liste complète.
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>

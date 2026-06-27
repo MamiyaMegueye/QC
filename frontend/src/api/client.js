@@ -140,4 +140,47 @@ export const api = {
     }
     return res.blob()
   },
+
+  // ====================================================================
+  //  POINT 5 SISTA : validations + rapport de Controle Qualite
+  // ====================================================================
+
+  // Recupere les decisions de validation + metadata QC de la session
+  getValidations: (sessionId) =>
+    jsonFetch(`/api/session/${sessionId}/validations`),
+
+  // Sauvegarde les decisions de validation (+ optionnellement metadata)
+  //   validations : { 'basic:doublons_lignes': {status, comment}, 'ai:0': {...} }
+  //   metadata    : { responsable_qc, fonction, date_validation, ... }
+  saveValidations: (sessionId, validations, metadata = null) =>
+    jsonFetch(`/api/session/${sessionId}/validations`, {
+      method: "POST",
+      body: JSON.stringify({ validations, metadata }),
+    }),
+
+  // Genere et telecharge le rapport QC .docx
+  downloadQcReport: async (sessionId, metadata = {}) => {
+    const res = await fetch(
+      `${API_URL}/api/session/${sessionId}/qc-report`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ metadata }),
+      }
+    )
+    if (!res.ok) {
+      let msg = `Erreur ${res.status}`
+      try {
+        const data = await res.json()
+        msg = data.detail || msg
+      } catch {}
+      throw new Error(msg)
+    }
+    // Recupere le nom de fichier depuis Content-Disposition si present
+    const cd = res.headers.get("content-disposition") || ""
+    const fnMatch = cd.match(/filename="([^"]+)"/)
+    const filename = fnMatch ? fnMatch[1] : "rapport_qc.docx"
+    const blob = await res.blob()
+    return { blob, filename }
+  },
 }

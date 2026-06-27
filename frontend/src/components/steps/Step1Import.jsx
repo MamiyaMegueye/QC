@@ -1,8 +1,12 @@
-import { useState } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useStore } from "../../store/useStore"
 import { api } from "../../api/client"
 import UploadZone from "../ui/UploadZone"
-import { CheckCircle, XCircle, Loader2, Sparkles } from "lucide-react"
+import {
+  CheckCircle, XCircle, Loader2, Sparkles,
+  KeyRound, AlertTriangle, RefreshCw,
+  ChevronDown, ChevronUp,
+} from "lucide-react"
 
 const TYPES_ENQUETE = [
   "(Sélectionner ou saisir)",
@@ -23,11 +27,268 @@ const TYPES_ENQUETE = [
   "Autre (préciser ci-dessous)",
 ]
 
+// Colonnes-clés essentielles, TOUJOURS visibles
+const KEY_COLUMNS_ESSENTIAL = [
+  {
+    key: "id",
+    label: "Identifiant unique de l'observation",
+    hint: "Colonne qui identifie de manière unique chaque ligne. À définir explicitement par l'équipe SISTA.",
+    required: true,
+  },
+  {
+    key: "enqueteur",
+    label: "Enquêteur / agent de collecte",
+    hint: "Nom ou code de la personne ayant collecté la donnée. Active le bilan par enquêteur.",
+    required: false,
+  },
+]
+
+// Métadonnées de collecte (Kobo/ODK) — section repliable.
+// Si rien n'est auto-détecté, la section reste repliée pour ne pas polluer l'écran.
+const KEY_COLUMNS_OPTIONAL = [
+  {
+    key: "start",
+    label: "Date / heure de début",
+    hint: "Horodatage du début. Active les tests de durée.",
+  },
+  {
+    key: "end",
+    label: "Date / heure de fin",
+    hint: "Horodatage de fin. Doit aller de pair avec le début.",
+  },
+  {
+    key: "lat",
+    label: "Latitude (GPS)",
+    hint: "Coordonnée GPS - latitude.",
+  },
+  {
+    key: "lon",
+    label: "Longitude (GPS)",
+    hint: "Coordonnée GPS - longitude.",
+  },
+]
+
+// ====================================================================
+//  Carte colonnes-clés
+// ====================================================================
+function ColumnMappingCard() {
+  const store = useStore()
+
+  // La section "Métadonnées de collecte" est dépliée automatiquement
+  // si au moins une auto-détection a trouvé quelque chose dedans
+  const hasMetadataDetected = useMemo(() => {
+    const m = store.previewAutoMapping || {}
+    return !!(m.start || m.end || m.lat || m.lon)
+  }, [store.previewAutoMapping])
+  const [metadataExpanded, setMetadataExpanded] = useState(false)
+
+  // Auto-déplier quand on découvre des métadonnées (au upload)
+  useEffect(() => {
+    if (hasMetadataDetected) setMetadataExpanded(true)
+  }, [hasMetadataDetected])
+
+  if (!store.dataFile) return null
+
+  if (store.previewLoading) {
+    return (
+      <div className="card">
+        <h3 className="card-title flex items-center gap-2">
+          <KeyRound className="w-5 h-5 text-gold" />
+          Colonnes-clés du fichier
+        </h3>
+        <div className="flex items-center gap-3 text-gray-600 text-sm py-4">
+          <Loader2 className="w-5 h-5 animate-spin text-navy" />
+          Lecture rapide du fichier...
+        </div>
+      </div>
+    )
+  }
+
+  if (store.previewError) {
+    return (
+      <div className="card">
+        <h3 className="card-title flex items-center gap-2">
+          <KeyRound className="w-5 h-5 text-gold" />
+          Colonnes-clés du fichier
+        </h3>
+        <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-800 flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="font-bold m-0">Impossible de lire le fichier</p>
+            <p className="m-0 mt-1">{store.previewError}</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!store.previewColumns || store.previewColumns.length === 0) {
+    return null
+  }
+
+  // Compteur "X / 4" pour le badge de la section repliable
+  const nbMetadataFilled = KEY_COLUMNS_OPTIONAL.reduce(
+    (n, kc) => n + (store.columnMapping[kc.key] ? 1 : 0),
+    0
+  )
+
+  const idMissing = !store.columnMapping.id
+
+  const renderSelect = (kc) => {
+    const value = store.columnMapping[kc.key] || ""
+    const isMissing = kc.required && !value
+    return (
+      <div key={kc.key}>
+        <label className="label-text flex items-center gap-1">
+          {kc.label}
+          {kc.required && (
+            <span className="text-red-600 text-xs font-bold" title="Champ obligatoire">
+              *
+            </span>
+          )}
+        </label>
+        <select
+          className={`input-field ${isMissing ? "border-red-400 bg-red-50" : ""}`}
+          value={value}
+          onChange={(e) => store.setColumnMappingField(kc.key, e.target.value)}
+        >
+          <option value="">— Aucune —</option>
+          {store.previewColumns.map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
+        <p className="text-xs text-gray-500 mt-1 m-0">{kc.hint}</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="card">
+      <h3 className="card-title flex items-center gap-2">
+        <KeyRound className="w-5 h-5 text-gold" />
+        Colonnes-clés du fichier
+      </h3>
+      <p className="card-desc">
+        Identifiez les colonnes essentielles avant l'analyse. Les valeurs proposées
+        sont auto-détectées et peuvent être corrigées. <strong>L'identifiant unique
+        est obligatoire</strong> et doit être validé par l'équipe SISTA.
+      </p>
+
+      <div className="bg-gray-50 rounded-lg px-3 py-2 mb-4 text-xs text-gray-600 flex items-center justify-between flex-wrap gap-2">
+        <span>
+          <strong>{store.previewColumns.length}</strong> colonne(s) détectée(s)
+          {store.previewProfile?.summary?.n_rows
+            ? ` · ${store.previewProfile.summary.n_rows} observation(s)`
+            : ""}
+        </span>
+        <button
+          onClick={() => store.resetColumnMapping()}
+          className="text-xs text-navy hover:underline flex items-center gap-1"
+          title="Restaurer l'auto-détection"
+        >
+          <RefreshCw className="w-3 h-3" />
+          Restaurer l'auto-détection
+        </button>
+      </div>
+
+      {/* ---- Colonnes essentielles, TOUJOURS visibles ---- */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {KEY_COLUMNS_ESSENTIAL.map(renderSelect)}
+      </div>
+
+      {/* ---- Section repliable : metadonnees de collecte ---- */}
+      <div className="mt-4 border-t border-gray-200 pt-3">
+        <button
+          type="button"
+          onClick={() => setMetadataExpanded(!metadataExpanded)}
+          className="w-full flex items-center justify-between text-left text-sm font-semibold text-navy hover:bg-gray-50 rounded-lg px-2 py-2 transition-colors"
+        >
+          <span className="flex items-center gap-2 flex-wrap">
+            Métadonnées de collecte
+            <span className="text-xs font-normal text-gray-500">
+              (optionnel — utile pour les enquêtes terrain Kobo / ODK)
+            </span>
+            {nbMetadataFilled > 0 && (
+              <span className="bg-gold/20 text-navy text-xs px-2 py-0.5 rounded-full font-bold">
+                {nbMetadataFilled} / 4
+              </span>
+            )}
+          </span>
+          {metadataExpanded ? (
+            <ChevronUp className="w-4 h-4" />
+          ) : (
+            <ChevronDown className="w-4 h-4" />
+          )}
+        </button>
+
+        {metadataExpanded && (
+          <div className="slide-up mt-3">
+            <p className="text-xs text-gray-500 mb-3 italic">
+              Renseignez ces colonnes uniquement si votre fichier contient des
+              horodatages de collecte (start/end) ou des coordonnées GPS. Elles
+              activent les tests automatiques de durée, d'intervalle entre
+              observations et de couverture GPS.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {KEY_COLUMNS_OPTIONAL.map(renderSelect)}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {idMissing && (
+        <div className="mt-4 bg-amber-50 border-l-4 border-amber-500 rounded-r-xl p-3 px-4 flex items-start gap-2">
+          <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div className="text-sm">
+            <p className="font-bold text-amber-900 m-0">
+              Identifiant unique requis
+            </p>
+            <p className="text-amber-800 m-0 mt-1 text-xs">
+              Choisissez la colonne qui sert d'identifiant unique des observations.
+              Cette information est sous la responsabilité de l'équipe SISTA et doit
+              être définie avant tout traitement.
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ====================================================================
+//  Composant principal
+// ====================================================================
+
 export default function Step1Import() {
   const store = useStore()
   const [typeChoice, setTypeChoice] = useState(TYPES_ENQUETE[0])
   const [typeCustom, setTypeCustom] = useState(store.surveyType || "")
   const [testing, setTesting] = useState(false)
+
+  // ---- Auto-charger les colonnes dès qu'un fichier est uploadé ----
+  useEffect(() => {
+    if (!store.dataFile) return
+    let cancelled = false
+    store.setPreviewLoading(true)
+    store.setPreviewError(null)
+    api
+      .previewColumns(store.dataFile, store.dictFile)
+      .then((data) => {
+        if (cancelled) return
+        store.setPreviewData(data)
+      })
+      .catch((e) => {
+        if (cancelled) return
+        store.setPreviewError(e.message || "Erreur de lecture")
+      })
+      .finally(() => {
+        if (cancelled) return
+        store.setPreviewLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [store.dataFile, store.dictFile])
 
   const handleTestKey = async () => {
     const apiName = store.selectedApi
@@ -56,19 +317,33 @@ export default function Step1Import() {
     if (v) store.setSurveyType(v)
   }
 
+  // L'ID est obligatoire (recommandation SISTA)
+  const idDefined = !!(store.columnMapping?.id || "").trim()
+  const canAnalyze = !!store.dataFile && idDefined && !store.previewLoading
+
   const handleAnalyze = async () => {
     if (!store.dataFile) {
       store.setApiError("Veuillez d'abord importer une base de données.")
       return
     }
+    if (!idDefined) {
+      store.setApiError(
+        "Veuillez définir la colonne identifiant unique avant de lancer l'analyse."
+      )
+      return
+    }
     store.setIsAnalyzing(true)
     store.setApiError(null)
     try {
+      const mappingToSend = Object.fromEntries(
+        Object.entries(store.columnMapping).filter(([_, v]) => v && v.trim())
+      )
       const data = await api.analyze(
         store.dataFile,
         store.dictFile,
         store.formFile,
-        store.params
+        store.params,
+        mappingToSend
       )
       store.setAnalysisData(data)
       store.setStep(2)
@@ -124,6 +399,9 @@ export default function Step1Import() {
         </div>
       </div>
 
+      {/* Carte colonnes-cles (apparait apres upload) */}
+      <ColumnMappingCard />
+
       {/* Divider */}
       <div className="divider-fancy">
         <div className="text-gold-deep font-bold text-base bg-white px-3 py-1 rounded-full border-2 border-gold shadow-sm">
@@ -163,7 +441,6 @@ export default function Step1Import() {
           })}
         </div>
 
-        {/* Statut .env (uniquement le badge vert si OK, rien sinon) */}
         {currentConfigured && (
           <div className="bg-green-50 border border-green-200 rounded-xl p-3 mb-3 flex items-center gap-2">
             <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
@@ -173,7 +450,6 @@ export default function Step1Import() {
           </div>
         )}
 
-        {/* Champ saisie clé (toujours visible) */}
         <div className="grid grid-cols-1 md:grid-cols-[1fr,auto] gap-3 items-end">
           <div>
             <label className="label-text">
@@ -286,10 +562,10 @@ export default function Step1Import() {
       </div>
 
       {/* Bouton Analyser */}
-      <div className="flex justify-center">
+      <div className="flex flex-col items-center">
         <button
           onClick={handleAnalyze}
-          disabled={!store.dataFile || store.isAnalyzing}
+          disabled={!canAnalyze || store.isAnalyzing}
           className="btn-primary px-12 py-4 text-base"
         >
           {store.isAnalyzing ? (
@@ -301,6 +577,11 @@ export default function Step1Import() {
             "Analyser le fichier"
           )}
         </button>
+        {!canAnalyze && store.dataFile && !idDefined && (
+          <p className="text-xs text-amber-700 mt-2 text-center">
+            Définissez la colonne identifiant unique pour activer l'analyse.
+          </p>
+        )}
       </div>
     </div>
   )

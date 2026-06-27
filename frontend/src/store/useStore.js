@@ -12,6 +12,23 @@ const isAuthFromStorage = () => {
   }
 }
 
+const EMPTY_MAPPING = {
+  enqueteur: "",
+  id: "",
+  start: "",
+  end: "",
+  lat: "",
+  lon: "",
+}
+
+const EMPTY_QC_METADATA = {
+  responsable_qc: "",
+  fonction: "",
+  organisation: "",
+  date_validation: "",
+  observations_generales: "",
+}
+
 export const useStore = create((set, get) => ({
   // Authentification
   isAuthenticated: isAuthFromStorage(),
@@ -31,9 +48,43 @@ export const useStore = create((set, get) => ({
   dataFile: null,
   dictFile: null,
   formFile: null,
-  setDataFile: (f) => set({ dataFile: f }),
+  setDataFile: (f) =>
+    set({
+      dataFile: f,
+      // Reset du preview a chaque nouveau fichier
+      previewColumns: [],
+      previewAutoMapping: { ...EMPTY_MAPPING },
+      previewProfile: null,
+      columnMapping: { ...EMPTY_MAPPING },
+      previewError: null,
+    }),
   setDictFile: (f) => set({ dictFile: f }),
   setFormFile: (f) => set({ formFile: f }),
+
+  // ---- Pre-visualisation des colonnes (avant analyse) ----
+  previewColumns: [],
+  previewAutoMapping: { ...EMPTY_MAPPING },
+  previewProfile: null,
+  previewLoading: false,
+  previewError: null,
+  setPreviewData: (data) =>
+    set({
+      previewColumns: data.columns || [],
+      previewAutoMapping: { ...EMPTY_MAPPING, ...(data.auto_mapping || {}) },
+      previewProfile: data.profile || null,
+      // Pre-remplir le mapping utilisateur avec l'auto-detection
+      columnMapping: { ...EMPTY_MAPPING, ...(data.auto_mapping || {}) },
+      previewError: null,
+    }),
+  setPreviewLoading: (v) => set({ previewLoading: v }),
+  setPreviewError: (e) => set({ previewError: e }),
+
+  // ---- Mapping utilisateur des colonnes-cles (responsabilite SISTA) ----
+  columnMapping: { ...EMPTY_MAPPING },
+  setColumnMappingField: (key, value) =>
+    set((s) => ({ columnMapping: { ...s.columnMapping, [key]: value } })),
+  resetColumnMapping: () =>
+    set((s) => ({ columnMapping: { ...EMPTY_MAPPING, ...s.previewAutoMapping } })),
 
   // Config IA
   selectedApi: "api1",
@@ -41,7 +92,7 @@ export const useStore = create((set, get) => ({
   apiKey2: "",
   api1Status: null,
   api2Status: null,
-  api1Configured: false,  // true si .env contient la cle
+  api1Configured: false,
   api2Configured: false,
   setSelectedApi: (api) => set({ selectedApi: api }),
   setApiKey1: (k) => set({ apiKey1: k, api1Status: null }),
@@ -82,6 +133,10 @@ export const useStore = create((set, get) => ({
       mp: data.mp,
       stats: data.qc_basic.stats,
       preview: data.preview,
+      // Nouvelle analyse = reset des validations et metadata QC
+      validations: {},
+      qcMetadata: { ...EMPTY_QC_METADATA },
+      qcReportError: null,
     }),
 
   // Resultats IA
@@ -103,7 +158,49 @@ export const useStore = create((set, get) => ({
   setEnqueteurSummary: (data) =>
     set({ enqueteurSummary: data.summary, enqueteurCounts: data.counts }),
 
-  // Erreurs
+  // ====================================================================
+  //  POINT 5 SISTA : workflow de validation + rapport QC
+  // ====================================================================
+
+  // validations : { 'basic:doublons_lignes': {status, comment}, 'ai:0': {...} }
+  validations: {},
+  setValidationStatus: (itemId, status) =>
+    set((s) => ({
+      validations: {
+        ...s.validations,
+        [itemId]: {
+          status,
+          comment: (s.validations[itemId]?.comment) || "",
+        },
+      },
+    })),
+  setValidationComment: (itemId, comment) =>
+    set((s) => ({
+      validations: {
+        ...s.validations,
+        [itemId]: {
+          status: s.validations[itemId]?.status || "pending",
+          comment,
+        },
+      },
+    })),
+  setAllValidations: (validations) => set({ validations: validations || {} }),
+  resetValidations: () => set({ validations: {} }),
+
+  // Metadonnees du rapport QC (responsable, date, etc.)
+  qcMetadata: { ...EMPTY_QC_METADATA },
+  setQcMetadataField: (key, value) =>
+    set((s) => ({ qcMetadata: { ...s.qcMetadata, [key]: value } })),
+  setQcMetadata: (metadata) =>
+    set((s) => ({ qcMetadata: { ...EMPTY_QC_METADATA, ...s.qcMetadata, ...metadata } })),
+
+  // Etat de generation du rapport
+  qcReportLoading: false,
+  qcReportError: null,
+  setQcReportLoading: (v) => set({ qcReportLoading: v }),
+  setQcReportError: (e) => set({ qcReportError: e }),
+
+  // Erreurs globales
   apiError: null,
   setApiError: (e) => set({ apiError: e }),
 
@@ -113,13 +210,18 @@ export const useStore = create((set, get) => ({
   setIsAnalyzing: (v) => set({ isAnalyzing: v }),
   setIsGenerating: (v) => set({ isGenerating: v }),
 
-  // Reset
+  // Reset complet
   reset: () =>
     set({
       currentStep: 1,
       dataFile: null,
       dictFile: null,
       formFile: null,
+      previewColumns: [],
+      previewAutoMapping: { ...EMPTY_MAPPING },
+      previewProfile: null,
+      previewError: null,
+      columnMapping: { ...EMPTY_MAPPING },
       sessionId: null,
       profile: null,
       results: [],
@@ -132,5 +234,9 @@ export const useStore = create((set, get) => ({
       aiMetrics: null,
       enqueteurSummary: [],
       apiError: null,
+      validations: {},
+      qcMetadata: { ...EMPTY_QC_METADATA },
+      qcReportError: null,
+      qcReportLoading: false,
     }),
 }))

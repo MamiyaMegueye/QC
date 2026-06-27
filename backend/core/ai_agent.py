@@ -152,28 +152,82 @@ def _call_with_retry(api: str, api_key: str, model: str,
 #  Strategie de decoupage des variables
 # ----------------------------------------------------------------------
 
-def _filter_relevant_vars(variables: list) -> list:
+def _filter_relevant_vars(variables: list, mp: dict = None,
+                          max_vars: int = 120) -> list:
+    """Filtre et plafonne les variables envoyees a l'IA pour le QC intelligent.
+
+    Strategie (v2 - optimisation perf pour gros fichiers) :
+      1. Exclure les metadonnees techniques (Kobo, ODK, identifiants systeme)
+      2. Exclure les variables tres peu remplies (<10%) ou constantes
+      3. Exclure les colonnes-cles techniques declarees (id, start, end, lat, lon)
+         MAIS GARDER la colonne enqueteur (utile pour anomalies par agent)
+      4. Plafonner a max_vars variables (les plus remplies en priorite)
+
+    Pour un fichier de 375 colonnes, on passe typiquement de 375 -> ~100,
+    soit 2 lots IA au lieu de 5+ (gain de ~60% sur le temps de generation).
+    """
+    # Patterns techniques a exclure (alignes sur analytical_report)
     SKIP_PREFIXES = ("__", "_")
-    SKIP_PATTERNS = ("_uuid", "_submission_time", "_validation_status",
-                     "_attachments", "_geolocation", "_tags", "_notes",
-                     "__version__", "formhub/", "_xform_id", "meta/")
-    SKIP_EXACT = {"start", "end", "today", "deviceid", "subscriberid",
-                  "simserial", "phonenumber", "username", "audit"}
+    SKIP_PATTERNS = (
+        # Metadonnees Kobo / ODK / XLSForm
+        "_uuid", "_submission_time", "_validation_status",
+        "_attachments", "_geolocation", "_tags", "_notes",
+        "__version__", "formhub/", "_xform_id", "meta/", "_index",
+        # Identifiants techniques
+        "uuid", "guid", "session_id", "deviceid", "subscriberid",
+        "simserial", "imei", "device_id", "serial_number",
+        # GPS (deja filtres via mp si declares)
+        "latitude", "longitude", "altitude", "geopoint", "geoshape",
+        "_lat", "_lon", "_lng", "_coord",
+        # Contacts personnels (donnees sensibles, pas exploitables)
+        "telephone", "_phone", "tel_", "numero_tel", "mobile",
+        "email", "courriel", "adresse_email",
+        # Champs libres trop ouverts
+        "commentaire", "comments", "remarque", "remark",
+        "observation_libre", "autres_precise", "autre_precis",
+        # Identite (RGPD)
+        "nom_complet", "first_name", "last_name", "prenom",
+        "nom_repondant", "nom_chef",
+    )
+    SKIP_EXACT = {"start", "end", "today", "starttime", "endtime",
+                  "username", "audit"}
+
+    # Colonnes-cles techniques declarees par l'utilisateur a EXCLURE
+    # (sauf enqueteur qu'on garde car utile pour anomalies par agent)
+    excluded_keys = set()
+    if mp:
+        for k in ("id", "start", "end", "lat", "lon"):
+            v = mp.get(k)
+            if v:
+                excluded_keys.add(v)
 
     filtered = []
     for v in variables:
-        name = v["name"].lower()
-        if any(name.startswith(p) for p in SKIP_PREFIXES):
+        name = v["name"]
+        name_lower = name.lower()
+        # Exclusions strictes
+        if name in excluded_keys:
             continue
-        if any(p in name for p in SKIP_PATTERNS):
+        if any(name_lower.startswith(p) for p in SKIP_PREFIXES):
             continue
-        if name in SKIP_EXACT:
+        if any(p in name_lower for p in SKIP_PATTERNS):
             continue
-        if v["fill_rate"] < 5:
+        if name_lower in SKIP_EXACT:
+            continue
+        # Qualite minimale (relevee de 5% a 10%)
+        if v["fill_rate"] < 10:
             continue
         if v["uniques"] <= 1:
             continue
+        # Type non analysable
+        if v.get("type") in ("identifiant", "date", "vide"):
+            continue
         filtered.append(v)
+
+    # Cap absolu : on garde les plus remplies en priorite
+    if len(filtered) > max_vars:
+        filtered = sorted(filtered, key=lambda v: -v["fill_rate"])[:max_vars]
+
     return filtered
 
 
@@ -224,7 +278,7 @@ Dans un fichier d'enquete, il y a TOUJOURS plusieurs entites distinctes :
 
 Si tu identifies une colonne comme etant le NOM D'ENQUETEUR, tu peux SEULEMENT :
 - L'utiliser pour identifier qui a saisi la ligne (sortie informationnelle)
-- Detecter des anomalies SUR son travail (ex : meme enqueteur >30 questionnaires/jour, \
+- Detecter des anomalies SUR son travail (ex : meme enqueteur >30 observations/jour, \
   ses durees toutes identiques, doublons dans ses GPS)
 Mais JAMAIS de croisement avec les attributs personnels du repondant.
 
@@ -470,10 +524,16 @@ def generate_rules(api: str,
 
     Retourne (regles_fusionnees, commentaire_global, metriques).
     """
-    # 1. Filtrer les variables pertinentes
-    all_vars = _filter_relevant_vars(profile["variables"])
+    # 1. Filtrer les variables pertinentes (avec mp pour exclure les techniques)
+    all_vars = _filter_relevant_vars(profile["variables"], mp=mp, max_vars=120)
+    n_initial = len(profile["variables"])
+    n_filtered = len(all_vars)
     if progress_callback:
-        progress_callback(f"Variables pertinentes : {len(all_vars)} (sur {len(profile['variables'])})")
+        progress_callback(
+            f"Variables pertinentes : {n_filtered} retenues sur {n_initial} "
+            f"({n_initial - n_filtered} ecartees : metadonnees techniques / "
+            f"variables trop peu remplies)"
+        )
 
     # 2. Construire l'extrait du dictionnaire si disponible
     dict_extract = ""
@@ -499,7 +559,13 @@ def generate_rules(api: str,
     n_batches = len(batches)
 
     if progress_callback:
-        progress_callback(f"Decoupage en {n_batches} lot(s) de regles a generer")
+        # Estimation : ~30-60s par lot selon le modele et la taille
+        est_min = max(1, n_batches // 2)
+        est_max = n_batches * 2
+        progress_callback(
+            f"Decoupage en {n_batches} lot(s) de regles a generer "
+            f"(duree estimee : {est_min}-{est_max} minutes)"
+        )
 
     # 5. Appeler l'IA pour chaque lot
     all_rules = []
