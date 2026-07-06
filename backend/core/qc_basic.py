@@ -119,6 +119,106 @@ def _enq(row, mp):
     return str(row[col]) if col and col in row and not _is_empty(row[col]) else "—"
 
 
+def _get_id_cols(mp):
+    """Retourne la liste des colonnes qui composent l'ID (1 pour simple, 2-3 pour composite).
+
+    Recommandation SISTA v2 : l'ID peut etre defini par 2 ou 3 variables lorsque
+    l'identification d'un enregistrement necessite une combinaison de colonnes.
+    """
+    id_val = mp.get("id")
+    if not id_val:
+        return []
+    if isinstance(id_val, (list, tuple)):
+        return [str(c) for c in id_val if c and str(c).strip()]
+    return [str(id_val)]
+
+
+def _get_id_series(df, mp):
+    """Renvoie une pd.Series representant l'identifiant (simple ou composite).
+
+    Pour un ID composite, on concatene les colonnes avec un separateur '||'.
+    Ex: ['zone', 'num_men'] avec zone=A, num_men=001 -> 'A||001'
+    """
+    id_cols = _get_id_cols(mp)
+    if not id_cols:
+        return None
+    # Verifier que toutes les colonnes existent
+    missing = [c for c in id_cols if c not in df.columns]
+    if missing:
+        return None
+    if len(id_cols) == 1:
+        return df[id_cols[0]].astype(str)
+    # Concatenation pour ID composite
+    return df[id_cols].astype(str).agg("||".join, axis=1)
+
+
+def compute_duration_stats(df, mp):
+    """Calcule les statistiques de duree d'observation a partir de start/end.
+
+    Utile pour proposer automatiquement un seuil pertinent (recommandation SISTA).
+
+    Retourne un dict avec:
+      - n_valid       : nombre de durees calculables
+      - mean, median  : mesures de tendance centrale (en minutes)
+      - p10, p25, p75, p90 : percentiles
+      - suggested_min : seuil suggere (median - 30% ou p10, selon distribution)
+      - histogram     : bins pour visualisation
+
+    Retourne None si start/end non definis ou aucune duree calculable.
+    """
+    s_col, e_col = mp.get("start"), mp.get("end")
+    if not s_col or not e_col or s_col not in df.columns or e_col not in df.columns:
+        return None
+
+    durations_min = []
+    for idx in df.index:
+        s = _parse_dt(df.loc[idx, s_col])
+        e = _parse_dt(df.loc[idx, e_col])
+        if s is None or e is None or pd.isna(s) or pd.isna(e):
+            continue
+        dur = (e - s).total_seconds() / 60
+        # On ignore les durees negatives (erreurs de saisie) et absurdes (>8h)
+        if 0 < dur < 480:
+            durations_min.append(dur)
+
+    if len(durations_min) < 5:
+        return None
+
+    durations_arr = np.array(durations_min)
+    median = float(np.median(durations_arr))
+    mean = float(np.mean(durations_arr))
+    p10 = float(np.percentile(durations_arr, 10))
+    p25 = float(np.percentile(durations_arr, 25))
+    p75 = float(np.percentile(durations_arr, 75))
+    p90 = float(np.percentile(durations_arr, 90))
+
+    # Suggestion de seuil : le max entre "median - 30%" et p10
+    # Cette approche est conservative : on cible les vrais outliers courts,
+    # sans etre trop laxiste (0.7 * median) ni trop strict (p10).
+    suggested_min = max(round(median * 0.6, 0), round(p10, 0))
+
+    # Histogramme pour visualisation (10 bins)
+    counts, edges = np.histogram(durations_arr, bins=10)
+    histogram = [
+        {"bin_start": round(float(edges[i]), 1),
+         "bin_end": round(float(edges[i + 1]), 1),
+         "count": int(counts[i])}
+        for i in range(len(counts))
+    ]
+
+    return {
+        "n_valid":       len(durations_min),
+        "median":        round(median, 1),
+        "mean":          round(mean, 1),
+        "p10":           round(p10, 1),
+        "p25":           round(p25, 1),
+        "p75":           round(p75, 1),
+        "p90":           round(p90, 1),
+        "suggested_min": int(suggested_min),
+        "histogram":     histogram,
+    }
+
+
 def _result(id, titre, severite, pourquoi, cause, action, lignes, colonnes):
     return {
         "id": id, "titre": titre,
@@ -147,23 +247,43 @@ def test_doublons_lignes(df, mp, profile, params):
 
 
 def test_id_duplique(df, mp, profile, params):
-    col = mp.get("id")
-    if not col or col not in df.columns:
+    id_cols = _get_id_cols(mp)
+    if not id_cols:
         return None
+    id_series = _get_id_series(df, mp)
+    if id_series is None:
+        return None
+
+    is_composite = len(id_cols) > 1
+    id_label = " + ".join(id_cols) if is_composite else id_cols[0]
+
     lignes = []
-    vals = df[col].astype(str)
-    counts = vals[~vals.apply(_is_empty)].value_counts()
+    counts = id_series[~id_series.apply(_is_empty)].value_counts()
     dups = counts[counts > 1]
     for idx in df.index:
-        v = str(df.loc[idx, col])
+        v = str(id_series.loc[idx])
         if v in dups.index:
             row = df.loc[idx]
-            lignes.append({"_index": int(idx) + 1, "Identifiant": v, "Enquêteur": _enq(row, mp),
-                           "_enqueteur": _enq(row, mp), "_probleme": f"ID dupliqué ({dups[v]}×)"})
-    return _result("id_duplique", f"Identifiant dupliqué ({len(dups)} ID)", "high",
-                   "Un même identifiant sur plusieurs lignes = doublon ou erreur.",
+            # Pour un ID composite, on affiche la combinaison lisible
+            display_v = v.replace("||", " + ") if is_composite else v
+            lignes.append({"_index": int(idx) + 1, "Identifiant": display_v,
+                           "Enquêteur": _enq(row, mp),
+                           "_enqueteur": _enq(row, mp),
+                           "_probleme": f"ID duplique ({dups[v]} occurrences)"})
+
+    titre = (f"Identifiant compose duplique ({len(dups)} occurrence(s)) — {id_label}"
+             if is_composite
+             else f"Identifiant duplique ({len(dups)} ID)")
+
+    pourquoi = ("Un meme identifiant compose (combinaison de plusieurs colonnes) "
+                "apparait sur plusieurs lignes = doublon ou erreur d'attribution."
+                if is_composite
+                else "Un meme identifiant sur plusieurs lignes = doublon ou erreur.")
+
+    return _result("id_duplique", titre, "high",
+                   pourquoi,
                    "Copier-coller ou double entretien.",
-                   "Vérifier chaque doublon et corriger.",
+                   "Verifier chaque doublon et corriger.",
                    lignes, ["_index", "Identifiant", "Enquêteur", "⚠️ Problème"])
 
 

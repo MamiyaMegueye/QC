@@ -18,8 +18,9 @@ const INFO = {
   },
   3: {
     icon: BarChart3,
-    title: "Étape 3 — Rapport QC",
-    msg: "Classement des enquêteurs selon le nombre et la gravité des anomalies pour identifier ceux à former en priorité.",
+    // Renommage demande par SISTA v2 : "Rapport QC" -> "Bilan par enqueteur"
+    title: "Étape 3 — Bilan par enquêteur",
+    msg: "Classement des enquêteurs selon les anomalies, validation formelle des cas, et génération du rapport de contrôle qualité pour audit.",
     grad: "linear-gradient(135deg, #FAEEDA 0%, #FCEBEB 50%, #EEEDFE 100%)",
     iconBg: "#A32D2D",
   },

@@ -49,15 +49,17 @@ from core.qc_basic import (
     build_enqueteur_summary,
     global_stats,
     auto_map,
+    compute_duration_stats,
 )
 from core import ai_agent
 from core import analytical_report
 from core import qc_report
+from core import appariement
 
 app = FastAPI(
     title="SISTA QC API",
     description="API REST pour le moteur de Controle Qualite SISTA",
-    version="1.6.0",
+    version="1.8.0",
 )
 
 ALLOWED_ORIGINS = [
@@ -288,8 +290,19 @@ async def analyze(
         if column_mapping:
             try:
                 parsed = json.loads(column_mapping)
-                user_mp = {k: v for k, v in parsed.items()
-                           if v and str(v).strip()}
+                # Un champ (typiquement 'id') peut etre une chaine OU une liste
+                # (identifiant composite : recommandation SISTA v2).
+                # On garde le format tel quel si liste non vide, sinon on nettoie.
+                user_mp = {}
+                for k, v in parsed.items():
+                    if isinstance(v, (list, tuple)):
+                        cleaned = [str(x).strip() for x in v if x and str(x).strip()]
+                        if len(cleaned) == 1:
+                            user_mp[k] = cleaned[0]  # 1 seul element -> string
+                        elif len(cleaned) > 1:
+                            user_mp[k] = cleaned      # >=2 -> liste (composite)
+                    elif v and str(v).strip():
+                        user_mp[k] = str(v).strip()
             except Exception:
                 user_mp = {}
         auto_mp = auto_map(loaded.df.columns)
@@ -298,6 +311,7 @@ async def analyze(
         # ───────────────────────────────────────────────────────────────
         # Recommandation SISTA : si l'utilisateur a declare l'ID,
         # on force ce type et on retype les autres "identifiants" auto.
+        # (declared_id peut etre str OU list pour l'ID composite)
         # ───────────────────────────────────────────────────────────────
         declared_id = user_mp.get("id", "")
         if declared_id:
@@ -338,6 +352,7 @@ async def analyze(
             "qc_basic": {
                 "results": [
                     {
+                        "id": r.get("id", r.get("titre", "")),
                         "titre": r["titre"],
                         "severite": r["severite"],
                         "n_cas": r["n_cas"],
@@ -501,6 +516,103 @@ def recompute_basic(session_id: str, duree_min: int = Form(18),
     sess["params"] = params
     stats = global_stats(sess["profile"], results)
     return {"ok": True, "results": results, "stats": stats, "mp": mp}
+
+
+@app.post("/api/preview-columns-only")
+async def preview_columns_only(data_file: UploadFile = File(...)):
+    """Retourne juste la liste des colonnes d'un fichier (leger).
+
+    Utile pour l'appariement pre/post : l'utilisateur charge un fichier
+    et on affiche les colonnes disponibles pour choisir le code.
+    """
+    try:
+        data_path = _save_upload(data_file)
+        loaded = load_file(data_path, None)
+        cols = [str(c) for c in loaded.df.columns]
+        return {
+            "ok": True,
+            "columns": cols,
+            "n_columns": len(cols),
+            "n_rows": int(loaded.df.shape[0]),
+        }
+    except Exception as e:
+        raise HTTPException(500, f"Erreur de lecture : {_clean_error_msg(e)}")
+
+
+@app.post("/api/compare-pre-post")
+async def compare_pre_post_endpoint(
+    pre_file: UploadFile = File(...),
+    post_file: UploadFile = File(...),
+    pre_code_cols: str = Form(...),   # JSON: string ou liste
+    post_code_cols: str = Form(...),  # JSON: string ou liste
+    pre_label: str = Form("Pré-test"),
+    post_label: str = Form("Post-test"),
+):
+    """Compare 2 fichiers (pre/post) et identifie les participants sans paire.
+
+    Recommandation SISTA v2 pour les enquetes longitudinales (VIH/SIDA, panel, ...).
+    """
+    try:
+        pre_path = _save_upload(pre_file)
+        post_path = _save_upload(post_file)
+
+        # Parser les codes (peut etre str ou list)
+        try:
+            pre_cols = json.loads(pre_code_cols)
+        except Exception:
+            pre_cols = pre_code_cols
+        try:
+            post_cols = json.loads(post_code_cols)
+        except Exception:
+            post_cols = post_code_cols
+
+        result = appariement.compare_pre_post(
+            pre_path=pre_path,
+            post_path=post_path,
+            pre_code_cols=pre_cols,
+            post_code_cols=post_cols,
+            pre_label=pre_label,
+            post_label=post_label,
+        )
+
+        # Ajouter les noms de fichiers pour rappel
+        result["pre_filename"] = pre_file.filename
+        result["post_filename"] = post_file.filename
+
+        return {"ok": True, **result}
+    except ValueError as ve:
+        raise HTTPException(400, str(ve))
+    except Exception as e:
+        raise HTTPException(500, f"Erreur d'appariement : {_clean_error_msg(e)}")
+
+
+@app.post("/api/compute-duration-stats")
+async def compute_duration_stats_endpoint(
+    data_file: UploadFile = File(...),
+    start_col: str = Form(...),
+    end_col: str = Form(...),
+):
+    """Calcule les stats de duree d'observation a partir d'un fichier + colonnes.
+
+    Utilise dans Step1 pour permettre a l'utilisateur d'avoir un seuil suggere
+    base sur sa propre distribution (recommandation SISTA v2).
+
+    Retourne None (204) si aucune duree calculable.
+    """
+    try:
+        data_path = _save_upload(data_file)
+        loaded = load_file(data_path, None)
+        mp = {"start": start_col, "end": end_col}
+        stats = compute_duration_stats(loaded.df, mp)
+        if not stats:
+            return JSONResponse(
+                {"ok": False, "message": "Impossible de calculer les durees "
+                                          "(start/end absents ou dates invalides)"},
+                status_code=200,
+            )
+        return {"ok": True, **stats}
+    except Exception as e:
+        raise HTTPException(500, f"Erreur : {_clean_error_msg(e)}")
 
 
 @app.get("/api/session/{session_id}/analysis-scope")

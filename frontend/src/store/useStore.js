@@ -1,6 +1,10 @@
 // Etat global de l'application.
 
 import { create } from "zustand"
+import {
+  saveDraft, loadDraft, clearDraft,
+  addHistoryEntry, loadHistory, removeHistoryEntry, clearHistory,
+} from "../lib/persistence"
 
 // Verifie si l'utilisateur etait deja connecte (rememberd via localStorage)
 const isAuthFromStorage = () => {
@@ -57,6 +61,10 @@ export const useStore = create((set, get) => ({
       previewProfile: null,
       columnMapping: { ...EMPTY_MAPPING },
       previewError: null,
+      isCompositeId: false,
+      compositeIdCols: ["", "", ""],
+      durationStats: null,
+      variableOverrides: {},
     }),
   setDictFile: (f) => set({ dictFile: f }),
   setFormFile: (f) => set({ formFile: f }),
@@ -85,6 +93,55 @@ export const useStore = create((set, get) => ({
     set((s) => ({ columnMapping: { ...s.columnMapping, [key]: value } })),
   resetColumnMapping: () =>
     set((s) => ({ columnMapping: { ...EMPTY_MAPPING, ...s.previewAutoMapping } })),
+
+  // ID composite (recommandation SISTA v2 : l'ID peut etre defini par 2-3 colonnes)
+  //   isCompositeId : true si l'utilisateur veut un ID compose
+  //   compositeIdCols : liste des colonnes composant l'ID (jusqu'a 3)
+  isCompositeId: false,
+  compositeIdCols: ["", "", ""],
+  setIsCompositeId: (v) => set({ isCompositeId: v }),
+  setCompositeIdCol: (index, value) =>
+    set((s) => {
+      const next = [...s.compositeIdCols]
+      next[index] = value
+      return { compositeIdCols: next }
+    }),
+
+  // Stats de duree (calculees a la demande via /api/compute-duration-stats)
+  durationStats: null,
+  durationStatsLoading: false,
+  setDurationStats: (stats) => set({ durationStats: stats }),
+  setDurationStatsLoading: (v) => set({ durationStatsLoading: v }),
+
+  // Variables a inclure dans le QC (recommandation SISTA v2)
+  //   variableOverrides : { nomVariable: { ignore: true } }
+  //   Par defaut vide -> toutes les variables sont incluses (le backend filtre)
+  variableOverrides: {},
+  setVariableIgnored: (name, ignored) =>
+    set((s) => {
+      const next = { ...s.variableOverrides }
+      if (ignored) {
+        next[name] = { ...(next[name] || {}), ignore: true }
+      } else {
+        if (next[name]) delete next[name].ignore
+        if (next[name] && Object.keys(next[name]).length === 0) delete next[name]
+      }
+      return { variableOverrides: next }
+    }),
+  setAllVariablesIgnored: (names, ignored) =>
+    set((s) => {
+      const next = { ...s.variableOverrides }
+      for (const n of names) {
+        if (ignored) {
+          next[n] = { ...(next[n] || {}), ignore: true }
+        } else if (next[n]) {
+          delete next[n].ignore
+          if (Object.keys(next[n]).length === 0) delete next[n]
+        }
+      }
+      return { variableOverrides: next }
+    }),
+  resetVariableOverrides: () => set({ variableOverrides: {} }),
 
   // Config IA
   selectedApi: "api1",
@@ -222,6 +279,10 @@ export const useStore = create((set, get) => ({
       previewProfile: null,
       previewError: null,
       columnMapping: { ...EMPTY_MAPPING },
+      isCompositeId: false,
+      compositeIdCols: ["", "", ""],
+      durationStats: null,
+      variableOverrides: {},
       sessionId: null,
       profile: null,
       results: [],
@@ -239,4 +300,105 @@ export const useStore = create((set, get) => ({
       qcReportError: null,
       qcReportLoading: false,
     }),
+
+  // ====================================================================
+  //  PERSISTANCE (localStorage) - Recommandation SISTA v2
+  // ====================================================================
+
+  // Etat du brouillon restaure (si trouve au demarrage)
+  draftAvailable: null,   // objet draft si un brouillon existe
+  draftRestored: false,   // vrai si l'utilisateur l'a restaure
+
+  checkDraftAvailability: () => {
+    const draft = loadDraft()
+    set({ draftAvailable: draft || null })
+    return draft
+  },
+
+  // Restaure un brouillon dans l'etat courant
+  // Note : les FICHIERS ne peuvent pas etre restaures (browser security),
+  //        l'utilisateur devra re-uploader mais tout le reste est pre-rempli.
+  restoreDraft: (draft) => {
+    if (!draft) return
+    set({
+      columnMapping: draft.columnMapping || { ...EMPTY_MAPPING },
+      isCompositeId: draft.isCompositeId || false,
+      compositeIdCols: draft.compositeIdCols || ["", "", ""],
+      variableOverrides: draft.variableOverrides || {},
+      params: draft.params || { duree_min: 18, iqr_k: 1.5, missing_seuil: 50 },
+      surveyType: draft.surveyType || "",
+      surveyDescription: draft.surveyDescription || "",
+      surveyPopulation: draft.surveyPopulation || "",
+      surveyEligibility: draft.surveyEligibility || "",
+      selectedApi: draft.selectedApi || "api1",
+      validations: draft.validations || {},
+      qcMetadata: { ...EMPTY_QC_METADATA, ...(draft.qcMetadata || {}) },
+      draftRestored: true,
+      draftAvailable: null,
+    })
+  },
+
+  discardDraft: () => {
+    clearDraft()
+    set({ draftAvailable: null, draftRestored: false })
+  },
+
+  // Sauvegarde du brouillon (a appeler apres chaque changement)
+  autoSaveDraft: () => {
+    const s = get()
+    // On ne sauvegarde que si l'utilisateur a commence a saisir quelque chose
+    const hasContent = !!(
+      s.dataFile ||
+      s.columnMapping.id ||
+      s.surveyType ||
+      s.surveyDescription ||
+      Object.keys(s.validations || {}).length > 0
+    )
+    if (hasContent) saveDraft(s)
+  },
+
+  // ====================================================================
+  //  HISTORIQUE - Liste des analyses passees
+  // ====================================================================
+
+  history: [],
+  loadHistoryFromStorage: () => set({ history: loadHistory() }),
+
+  // Enregistre l'analyse courante dans l'historique (a appeler apres
+  // avoir termine une phase importante : QC basique fait, ou rapport telecharge)
+  saveToHistory: (extra = {}) => {
+    const s = get()
+    if (!s.filename || !s.stats) return
+    const nHigh = (s.results || []).filter((r) => r.severite === "high").length
+    const nMed  = (s.results || []).filter((r) => r.severite === "med").length
+    const nLow  = (s.results || []).filter((r) => r.severite === "low").length
+    const nValidated = Object.values(s.validations || {}).filter(
+      (v) => v.status && v.status !== "pending"
+    ).length
+    const entry = {
+      filename:       s.filename,
+      surveyType:     s.surveyType,
+      n_observations: s.stats?.observations ?? s.stats?.questionnaires ?? 0,
+      n_variables:    s.profile?.summary?.n_vars || 0,
+      n_incoherences: s.stats?.incoherences || 0,
+      n_alertes:      s.stats?.tests_alertes || 0,
+      severities:     { high: nHigh, med: nMed, low: nLow },
+      n_ai_rules:     (s.aiRules || []).length,
+      n_validated:    nValidated,
+      responsable_qc: s.qcMetadata?.responsable_qc || "",
+      ...extra,
+    }
+    addHistoryEntry(entry)
+    set({ history: loadHistory() })
+  },
+
+  deleteHistoryEntry: (id) => {
+    removeHistoryEntry(id)
+    set({ history: loadHistory() })
+  },
+
+  clearAllHistory: () => {
+    clearHistory()
+    set({ history: [] })
+  },
 }))

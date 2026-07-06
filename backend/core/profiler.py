@@ -261,34 +261,47 @@ def apply_id_declaration(profile, declared_id_col):
     explicitement par l'equipe metier, jamais devinee aveuglement.
 
     Effets :
-      - La colonne declaree est forcee au type "identifiant"
+      - La (les) colonne(s) declaree(s) est/sont forcee(s) au type "identifiant"
       - Toute autre colonne auto-detectee comme "identifiant" est retypee
         selon son contenu (texte par defaut, numerique si pertinent)
 
     Args:
-        profile : profil {summary, variables}
-        declared_id_col : nom de la colonne identifiant (str) ou "" / None
+        profile          : profil {summary, variables}
+        declared_id_col  : nom de la colonne identifiant (str)
+                          OU liste de colonnes (list) pour un ID composite
+                          OU "" / None si non declare
 
     Retourne le profil mis a jour.
     """
     if not declared_id_col:
         return profile
 
-    declared_id_col = str(declared_id_col).strip()
-    if not declared_id_col:
+    # Normaliser : accepter str ou list
+    if isinstance(declared_id_col, (list, tuple)):
+        declared_cols = [str(c).strip() for c in declared_id_col if c and str(c).strip()]
+    else:
+        declared_cols = [str(declared_id_col).strip()]
+    declared_cols = [c for c in declared_cols if c]
+
+    if not declared_cols:
         return profile
 
-    found = False
+    declared_set = set(declared_cols)
+    found_count = 0
+
     for var in profile["variables"]:
-        if var["name"] == declared_id_col:
+        if var["name"] in declared_set:
             var["type"] = "identifiant"
             var["_id_declared"] = True
+            # Marquer si l'ID est composite (info utile pour le rapport)
+            if len(declared_cols) > 1:
+                var["_id_composite"] = True
+                var["_id_composite_cols"] = declared_cols
             var["stats"] = {}
-            found = True
+            found_count += 1
         elif var["type"] == "identifiant":
-            # Retyper : si les valeurs sont majoritairement numeriques, "numerique"
-            # sinon "texte" par defaut.
-            # On n'a pas la serie ici, on se fie aux exemples + uniques
+            # Retyper : si les valeurs sont majoritairement numeriques -> "numerique"
+            # sinon "texte" ou "categorielle" selon le nb d'uniques
             examples = var.get("examples", [])
             is_numeric_like = sum(
                 1 for e in examples
@@ -303,10 +316,8 @@ def apply_id_declaration(profile, declared_id_col):
                 var["type"] = "texte"
             var["_id_retyped"] = True
 
-    if not found:
-        # La colonne declaree n'a pas ete trouvee dans le profil
-        # (cas rare : variable filtree par overrides). On loggue seulement.
-        print(f"[apply_id_declaration] colonne '{declared_id_col}' introuvable dans le profil")
+    if found_count == 0:
+        print(f"[apply_id_declaration] aucune des colonnes declarees {declared_cols} trouvee dans le profil")
 
     n_rows = profile["summary"]["n_rows"]
     return _build_profile(profile["variables"], n_rows, len(profile["variables"]))

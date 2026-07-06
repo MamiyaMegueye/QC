@@ -86,6 +86,67 @@ export const api = {
     return res.json()
   },
 
+  // Calcule les stats de duree d'observation a partir d'un fichier
+  // (utilise dans Step1 pour proposer un seuil auto - reco SISTA v2)
+  computeDurationStats: async (dataFile, startCol, endCol) => {
+    const formData = new FormData()
+    formData.append("data_file", dataFile)
+    formData.append("start_col", startCol)
+    formData.append("end_col", endCol)
+    const res = await fetch(`${API_URL}/api/compute-duration-stats`, {
+      method: "POST",
+      body: formData,
+    })
+    if (!res.ok) {
+      let msg = `Erreur ${res.status}`
+      try {
+        const data = await res.json()
+        msg = data.detail || msg
+      } catch {}
+      throw new Error(msg)
+    }
+    return res.json()
+  },
+
+  // ====================================================================
+  //  Recommandation SISTA v2 : appariement pre/post (enquetes longitudinales)
+  // ====================================================================
+
+  previewColumnsOnly: async (dataFile) => {
+    const formData = new FormData()
+    formData.append("data_file", dataFile)
+    const res = await fetch(`${API_URL}/api/preview-columns-only`, {
+      method: "POST",
+      body: formData,
+    })
+    if (!res.ok) {
+      let msg = `Erreur ${res.status}`
+      try { const d = await res.json(); msg = d.detail || msg } catch {}
+      throw new Error(msg)
+    }
+    return res.json()
+  },
+
+  comparePrePost: async ({ preFile, postFile, preCodeCols, postCodeCols, preLabel, postLabel }) => {
+    const formData = new FormData()
+    formData.append("pre_file", preFile)
+    formData.append("post_file", postFile)
+    formData.append("pre_code_cols", JSON.stringify(preCodeCols))
+    formData.append("post_code_cols", JSON.stringify(postCodeCols))
+    if (preLabel) formData.append("pre_label", preLabel)
+    if (postLabel) formData.append("post_label", postLabel)
+    const res = await fetch(`${API_URL}/api/compare-pre-post`, {
+      method: "POST",
+      body: formData,
+    })
+    if (!res.ok) {
+      let msg = `Erreur ${res.status}`
+      try { const d = await res.json(); msg = d.detail || msg } catch {}
+      throw new Error(msg)
+    }
+    return res.json()
+  },
+
   generateRules: (payload) =>
     jsonFetch("/api/generate-rules", {
       method: "POST",

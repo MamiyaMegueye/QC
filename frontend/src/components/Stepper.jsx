@@ -4,7 +4,8 @@ import { useStore } from "../store/useStore"
 const STEPS = [
   { num: 1, label: "Importer" },
   { num: 2, label: "Détecter" },
-  { num: 3, label: "Rapport QC" },
+  // Renommage demande par SISTA v2 : "Rapport QC" -> "Bilan par enqueteur"
+  { num: 3, label: "Bilan par enquêteur" },
   { num: 4, label: "Rapport analytique" },
 ]
 
