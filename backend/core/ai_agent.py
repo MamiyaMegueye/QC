@@ -36,7 +36,7 @@ TPM_LIMIT_GROQ = 11000
 API_CONFIG = {
     "api1": {
         "model_fast":  "claude-haiku-4-5",
-        "model_smart": "claude-sonnet-4-6",
+        "model_smart": "claude-opus-4-6",   # ← changé ici
         "key_prefix":  "sk-ant-",
     },
     "api2": {
