@@ -17,6 +17,9 @@ import {
   AlertCircle,
   Clock,
   Zap,
+  Users,
+  X,
+  Info,
 } from "lucide-react"
 
 const SEV_LABEL = { high: "Gravité haute", med: "Gravité moyenne", low: "Gravité faible" }
@@ -44,6 +47,9 @@ function getRuleSeverite(nCas) {
   return null
 }
 
+// Valeur speciale "Tous les enqueteurs"
+const ALL_ENQ = "__all__"
+
 export default function QcAITab() {
   const store = useStore()
   const [expandedRules, setExpandedRules] = useState(new Set())
@@ -51,6 +57,35 @@ export default function QcAITab() {
 
   // Indices des règles désactivées par l'utilisateur (Set)
   const [disabledRules, setDisabledRules] = useState(() => new Set())
+
+  // ============================================================
+  //  Filtre par enqueteur (etat partage via zustand)
+  // ============================================================
+  const selectedEnqueteur = useStore((s) => s.qcFilterEnqueteur)
+  const setSelectedEnqueteur = useStore((s) => s.setQcFilterEnqueteur)
+
+  // Liste des enqueteurs presents dans les cas basiques + IA
+  // (meme calcul que dans QcBasicTab pour une liste coherente entre onglets)
+  const uniqueEnqueteurs = useMemo(() => {
+    const set = new Set()
+    for (const r of store.results || []) {
+      for (const l of r.lignes || []) {
+        const enq = l._enqueteur
+        if (enq && enq !== "—" && String(enq).trim() !== "") {
+          set.add(String(enq))
+        }
+      }
+    }
+    for (const l of store.aiResult?.lignes || []) {
+      const enq = l.Enqueteur
+      if (enq && enq !== "Inconnu" && String(enq).trim() !== "") {
+        set.add(String(enq))
+      }
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "fr", { numeric: true }))
+  }, [store.results, store.aiResult])
+
+  const isFiltered = selectedEnqueteur !== ALL_ENQ
 
   const apiLabel = store.selectedApi === "api1" ? "API 1" : "API 2"
   const currentKey =
@@ -114,16 +149,20 @@ export default function QcAITab() {
   }
 
   // ─── Regrouper les cas par regle (indispensable pour l'agregation) ─
+  //     Applique le filtre enqueteur si actif : les cas d'un autre
+  //     enqueteur sont exclus AVANT le regroupement.
   const casesByRule = useMemo(() => {
     const map = new Map()
     if (!store.aiResult?.lignes) return map
     for (const cas of store.aiResult.lignes) {
+      // Filtre enqueteur
+      if (isFiltered && String(cas.Enqueteur) !== selectedEnqueteur) continue
       const ri = cas._rule_idx
       if (!map.has(ri)) map.set(ri, [])
       map.get(ri).push(cas)
     }
     return map
-  }, [store.aiResult])
+  }, [store.aiResult, isFiltered, selectedEnqueteur])
 
   // ─── Liste des regles enrichie : avec n_cas + severite + filtrage texte ─
   const enrichedRules = useMemo(() => {
@@ -230,6 +269,66 @@ export default function QcAITab() {
 
       {store.aiResult && (
         <div className="slide-up">
+          {/* ============================================================
+              BARRE DE FILTRE PAR ENQUETEUR
+              (partagee avec l'onglet QC basique via zustand)
+              ============================================================ */}
+          {uniqueEnqueteurs.length > 0 && (
+            <div className="bg-white border border-gray-200 rounded-2xl p-4 mb-4 shadow-sm">
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-2 text-navy">
+                  <Users className="w-5 h-5 text-gold" />
+                  <label
+                    htmlFor="filter-enqueteur-ai"
+                    className="font-sora font-bold text-sm"
+                  >
+                    Filtrer par enquêteur :
+                  </label>
+                </div>
+                <select
+                  id="filter-enqueteur-ai"
+                  value={selectedEnqueteur}
+                  onChange={(e) => {
+                    setSelectedEnqueteur(e.target.value)
+                    setExpandedRules(new Set())
+                  }}
+                  className="flex-1 min-w-[180px] max-w-xs border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:border-gold focus:ring-2 focus:ring-gold/20 outline-none"
+                >
+                  <option value={ALL_ENQ}>
+                    Tous les enquêteurs ({uniqueEnqueteurs.length})
+                  </option>
+                  {uniqueEnqueteurs.map((enq) => (
+                    <option key={enq} value={enq}>
+                      {enq}
+                    </option>
+                  ))}
+                </select>
+                {isFiltered && (
+                  <button
+                    onClick={() => {
+                      setSelectedEnqueteur(ALL_ENQ)
+                      setExpandedRules(new Set())
+                    }}
+                    className="text-xs px-3 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 font-bold flex items-center gap-1"
+                    title="Réinitialiser le filtre"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                    Réinitialiser
+                  </button>
+                )}
+              </div>
+              {isFiltered && (
+                <p className="text-xs text-gray-500 mt-3 mb-0 italic flex items-start gap-1">
+                  <Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                  <span>
+                    Affichage limité aux cas de <strong>{selectedEnqueteur}</strong>.
+                    Ce filtre s'applique aussi à l'onglet QC basique.
+                  </span>
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Métriques globales */}
           {store.aiMetrics && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
@@ -364,6 +463,21 @@ export default function QcAITab() {
               </button>
             </div>
           </div>
+
+          {/* Cas particulier : enqueteur sans aucun cas IA */}
+          {isFiltered && totalCasActifs === 0 && totalCasMasques === 0 && (
+            <div className="bg-green-50 border-l-4 border-green-500 rounded-r-xl p-4 mb-3 flex items-start gap-3">
+              <Sparkles className="w-6 h-6 text-green-700 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-sora font-bold text-green-900 m-0">
+                  Aucune incohérence IA détectée pour {selectedEnqueteur}
+                </p>
+                <p className="text-sm text-green-800 mt-1 m-0">
+                  Cet enquêteur ne présente aucun cas dans les règles générées par l'IA.
+                </p>
+              </div>
+            </div>
+          )}
 
           {sortedRules.length === 0 && (
             <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 text-gray-600 text-center text-sm">

@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { useStore } from "../../store/useStore"
 import MetricCard from "../cards/MetricCard"
 import {
@@ -10,6 +10,8 @@ import {
   ChevronUp,
   Eye,
   EyeOff,
+  Users,
+  X,
 } from "lucide-react"
 
 const SEV_STYLES = {
@@ -43,10 +45,89 @@ const SEV_STYLES = {
   },
 }
 
+// Valeur speciale "Tous les enqueteurs"
+const ALL_ENQ = "__all__"
+
 export default function QcBasicTab() {
   const results = useStore((s) => s.results)
   const stats = useStore((s) => s.stats)
+  const aiResult = useStore((s) => s.aiResult)
   const [expanded, setExpanded] = useState(new Set())
+  // ============================================================
+  //  Filtre par enqueteur (etat partage via zustand)
+  //  -> le meme filtre s'applique aussi dans l'onglet QC intelligent
+  // ============================================================
+  const selectedEnqueteur = useStore((s) => s.qcFilterEnqueteur)
+  const setSelectedEnqueteur = useStore((s) => s.setQcFilterEnqueteur)
+
+  // Liste des enqueteurs uniques presents dans les anomalies (basiques + IA)
+  // On unifie les deux sources pour que le dropdown soit coherent
+  // entre les 2 onglets
+  const uniqueEnqueteurs = useMemo(() => {
+    const set = new Set()
+    // Depuis les tests basiques (champ _enqueteur en minuscule)
+    for (const r of results || []) {
+      for (const l of r.lignes || []) {
+        const enq = l._enqueteur
+        if (enq && enq !== "—" && String(enq).trim() !== "") {
+          set.add(String(enq))
+        }
+      }
+    }
+    // Depuis les cas IA (champ "Enqueteur" avec majuscule)
+    for (const l of aiResult?.lignes || []) {
+      const enq = l.Enqueteur
+      if (enq && enq !== "Inconnu" && String(enq).trim() !== "") {
+        set.add(String(enq))
+      }
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "fr", { numeric: true }))
+  }, [results, aiResult])
+
+  // Resultats filtres : chaque test conserve ses lignes,
+  // mais on ne garde que celles de l'enqueteur selectionne
+  const filteredResults = useMemo(() => {
+    if (selectedEnqueteur === ALL_ENQ) {
+      // Vue globale : rien a filtrer, on renvoie les resultats tels quels
+      return (results || []).map((r) => ({ ...r, _test_agrege: false }))
+    }
+    return (results || []).map((r) => {
+      const originalLignes = r.lignes || []
+      // Un test est "agrege" si aucune ligne n'a d'enqueteur attribue
+      // (ex : test_valeurs_manquantes, test_constantes -> niveau variable)
+      const isAgrege =
+        r.n_cas > 0 &&
+        originalLignes.length > 0 &&
+        originalLignes.every((l) => !l._enqueteur || l._enqueteur === "—")
+
+      const filteredLignes = isAgrege
+        ? []
+        : originalLignes.filter(
+            (l) => String(l._enqueteur) === selectedEnqueteur
+          )
+      const n_cas = filteredLignes.length
+      // Si l'enqueteur n'a aucun cas pour ce test, il apparait "ok" dans sa vue
+      const severite = n_cas > 0 ? r.severite : "ok"
+      return {
+        ...r,
+        lignes: filteredLignes,
+        n_cas,
+        severite,
+        _test_agrege: isAgrege,
+      }
+    })
+  }, [results, selectedEnqueteur])
+
+  const isFiltered = selectedEnqueteur !== ALL_ENQ
+
+  // Nombre de tests "agreges" (non attribuables a un enqueteur)
+  // masques quand un enqueteur est selectionne
+  const nTestsAgreges = filteredResults.filter((r) => r._test_agrege).length
+
+  // On masque les tests agreges quand on filtre par un enqueteur precis
+  const visibleResults = isFiltered
+    ? filteredResults.filter((r) => !r._test_agrege)
+    : filteredResults
 
   const toggle = (idx) => {
     const next = new Set(expanded)
@@ -56,14 +137,18 @@ export default function QcBasicTab() {
   }
 
   const order = { high: 0, med: 1, low: 2, ok: 3 }
-  const sortedResults = [...results].sort(
+  const sortedResults = [...visibleResults].sort(
     (a, b) => order[a.severite] - order[b.severite] || b.n_cas - a.n_cas
   )
 
-  const n_high = results.filter((r) => r.severite === "high").length
-  const n_med = results.filter((r) => r.severite === "med").length
-  const n_low = results.filter((r) => r.severite === "low").length
-  const n_ok = results.filter((r) => r.severite === "ok").length
+  const n_high = visibleResults.filter((r) => r.severite === "high").length
+  const n_med = visibleResults.filter((r) => r.severite === "med").length
+  const n_low = visibleResults.filter((r) => r.severite === "low").length
+  const n_ok = visibleResults.filter((r) => r.severite === "ok").length
+
+  // Nombre total d'anomalies (filtre ou non)
+  const nTotalCas = visibleResults.reduce((s, r) => s + (r.n_cas || 0), 0)
+  const nTestsAlertes = visibleResults.filter((r) => r.severite !== "ok").length
 
   // Indices des tests qui ont des cas a afficher (les seuls qu'on deplie)
   const expandableIdx = sortedResults
@@ -71,31 +156,111 @@ export default function QcBasicTab() {
     .filter((i) => i !== null)
 
   const allExpanded =
-    expandableIdx.length > 0 &&
-    expandableIdx.every((i) => expanded.has(i))
+    expandableIdx.length > 0 && expandableIdx.every((i) => expanded.has(i))
 
   const expandAll = () => setExpanded(new Set(expandableIdx))
   const collapseAll = () => setExpanded(new Set())
 
+  // Reset : replier tout et revenir a la vue globale
+  const clearFilter = () => {
+    setSelectedEnqueteur(ALL_ENQ)
+    setExpanded(new Set())
+  }
+
   return (
     <div>
-      {/* Metriques globales */}
+      {/* ============================================================
+          BARRE DE FILTRE PAR ENQUETEUR
+          ============================================================ */}
+      {uniqueEnqueteurs.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-2xl p-4 mb-5 shadow-sm">
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2 text-navy">
+              <Users className="w-5 h-5 text-gold" />
+              <label
+                htmlFor="filter-enqueteur"
+                className="font-sora font-bold text-sm"
+              >
+                Filtrer par enquêteur :
+              </label>
+            </div>
+            <select
+              id="filter-enqueteur"
+              value={selectedEnqueteur}
+              onChange={(e) => {
+                setSelectedEnqueteur(e.target.value)
+                setExpanded(new Set())
+              }}
+              className="flex-1 min-w-[180px] max-w-xs border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:border-gold focus:ring-2 focus:ring-gold/20 outline-none"
+            >
+              <option value={ALL_ENQ}>
+                Tous les enquêteurs ({uniqueEnqueteurs.length})
+              </option>
+              {uniqueEnqueteurs.map((enq) => (
+                <option key={enq} value={enq}>
+                  {enq}
+                </option>
+              ))}
+            </select>
+            {isFiltered && (
+              <button
+                onClick={clearFilter}
+                className="text-xs px-3 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 font-bold flex items-center gap-1"
+                title="Réinitialiser le filtre"
+              >
+                <X className="w-3.5 h-3.5" />
+                Réinitialiser
+              </button>
+            )}
+          </div>
+
+          {/* Message pour les tests agreges masques */}
+          {isFiltered && nTestsAgreges > 0 && (
+            <p className="text-xs text-gray-500 mt-3 mb-0 italic flex items-start gap-1">
+              <Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+              <span>
+                {nTestsAgreges} test{nTestsAgreges > 1 ? "s" : ""} agrégé
+                {nTestsAgreges > 1 ? "s" : ""} (valeurs manquantes, variables constantes)
+                {" "}
+                masqué{nTestsAgreges > 1 ? "s" : ""} : ces contrôles s'appliquent à toute la
+                base et ne peuvent pas être attribués à un enquêteur précis.
+              </span>
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* ============================================================
+          METRIQUES GLOBALES (recalculees selon le filtre)
+          ============================================================ */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
         <MetricCard
           variant="navy"
-          value={stats?.observations ?? stats?.questionnaires ?? 0}
-          label="Observations"
+          value={
+            isFiltered
+              ? selectedEnqueteur
+              : stats?.observations ?? stats?.questionnaires ?? 0
+          }
+          label={isFiltered ? "Enquêteur sélectionné" : "Observations"}
         />
-        <MetricCard variant="red" value={stats?.incoherences || 0} label="Incohérences" />
-        <MetricCard variant="blue" value={stats?.tests || 0} label="Tests" />
+        <MetricCard
+          variant="red"
+          value={isFiltered ? nTotalCas : stats?.incoherences || 0}
+          label={isFiltered ? "Anomalies de cet enquêteur" : "Incohérences"}
+        />
+        <MetricCard
+          variant="blue"
+          value={isFiltered ? visibleResults.length : stats?.tests || 0}
+          label={isFiltered ? "Tests appliqués" : "Tests"}
+        />
         <MetricCard
           variant="gold"
-          value={stats?.tests_alertes || 0}
+          value={isFiltered ? nTestsAlertes : stats?.tests_alertes || 0}
           label="Tests avec alertes"
         />
       </div>
 
-      {/* Repartition severite */}
+      {/* Repartition severite (basee sur la vue filtree) */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         <div className="bg-gradient-to-br from-red-100 to-red-300 rounded-2xl p-4 text-center border-l-4 border-red-500">
           <p className="font-sora text-3xl font-extrabold text-red-900 leading-none m-0">
@@ -134,7 +299,9 @@ export default function QcBasicTab() {
       {/* Header avec actions globales d'agregation */}
       <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
         <h5 className="font-sora font-bold text-navy m-0">
-          Anomalies regroupées par type
+          {isFiltered
+            ? `Anomalies de ${selectedEnqueteur}, regroupées par type`
+            : "Anomalies regroupées par type"}
         </h5>
         {expandableIdx.length > 0 && (
           <div className="flex gap-2">
@@ -157,6 +324,21 @@ export default function QcBasicTab() {
           </div>
         )}
       </div>
+
+      {/* Cas particulier : enqueteur sans aucune anomalie */}
+      {isFiltered && nTotalCas === 0 && (
+        <div className="bg-green-50 border-l-4 border-green-500 rounded-r-xl p-4 mb-3 flex items-start gap-3">
+          <CheckCircle2 className="w-6 h-6 text-green-700 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="font-sora font-bold text-green-900 m-0">
+              Aucune anomalie détectée pour {selectedEnqueteur}
+            </p>
+            <p className="text-sm text-green-800 mt-1 m-0">
+              Cet enquêteur ne présente aucun cas dans les tests attribuables individuellement.
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="space-y-2">
         {sortedResults.map((r, idx) => {

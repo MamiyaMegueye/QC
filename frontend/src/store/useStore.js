@@ -190,10 +190,11 @@ export const useStore = create((set, get) => ({
       mp: data.mp,
       stats: data.qc_basic.stats,
       preview: data.preview,
-      // Nouvelle analyse = reset des validations et metadata QC
+      // Nouvelle analyse = reset des validations, metadata QC et filtre
       validations: {},
       qcMetadata: { ...EMPTY_QC_METADATA },
       qcReportError: null,
+      qcFilterEnqueteur: "__all__",
     }),
 
   // Resultats IA
@@ -214,6 +215,13 @@ export const useStore = create((set, get) => ({
   enqueteurCounts: null,
   setEnqueteurSummary: (data) =>
     set({ enqueteurSummary: data.summary, enqueteurCounts: data.counts }),
+
+  // ====================================================================
+  //  Filtre par enqueteur partage entre QC basique et QC intelligent
+  //  Valeur "__all__" = tous les enqueteurs (pas de filtre)
+  // ====================================================================
+  qcFilterEnqueteur: "__all__",
+  setQcFilterEnqueteur: (v) => set({ qcFilterEnqueteur: v || "__all__" }),
 
   // ====================================================================
   //  POINT 5 SISTA : workflow de validation + rapport QC
@@ -299,6 +307,7 @@ export const useStore = create((set, get) => ({
       qcMetadata: { ...EMPTY_QC_METADATA },
       qcReportError: null,
       qcReportLoading: false,
+      qcFilterEnqueteur: "__all__",
     }),
 
   // ====================================================================
