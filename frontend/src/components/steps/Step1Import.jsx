@@ -3,7 +3,7 @@ import { useStore } from "../../store/useStore"
 import { api } from "../../api/client"
 import UploadZone from "../ui/UploadZone"
 import { DraftBanner, DraftRestoredBanner, HistoryCard } from "../HistoryPanel"
-import PrePostPanel from "../PrePostPanel"
+import BackCheckPanel from "../BackCheckPanel"
 import {
   CheckCircle, XCircle, Loader2, Sparkles,
   KeyRound, AlertTriangle, RefreshCw,
@@ -632,7 +632,7 @@ export default function Step1Import() {
   const [typeChoice, setTypeChoice] = useState(TYPES_ENQUETE[0])
   const [typeCustom, setTypeCustom] = useState(store.surveyType || "")
   const [testing, setTesting] = useState(false)
-  const [showPrePost, setShowPrePost] = useState(false)
+  const [showBackCheck, setShowBackCheck] = useState(false)
 
   // Au montage : verifier si un brouillon existe (recommandation SISTA v2)
   useEffect(() => {
@@ -752,28 +752,28 @@ export default function Step1Import() {
   return (
     <div className="space-y-5 slide-up">
       {/* Panel appariement pre/post (modal) */}
-      {showPrePost && <PrePostPanel onClose={() => setShowPrePost(false)} />}
+      {showBackCheck && <BackCheckPanel onClose={() => setShowBackCheck(false)} />}
 
       {/* Persistance : bannieres brouillon */}
       <DraftBanner />
       <DraftRestoredBanner />
 
-      {/* Outil special : appariement pre/post pour enquetes longitudinales */}
+      {/* Outil special : back check / controle croise */}
       <div className="bg-gradient-to-br from-purple-50 to-blue-50 border border-purple-200 rounded-2xl p-4 flex items-center gap-3 flex-wrap">
         <div className="bg-purple-600 rounded-full w-10 h-10 flex items-center justify-center flex-shrink-0">
           <GitCompare className="w-5 h-5 text-white" />
         </div>
         <div className="flex-1 min-w-0">
           <p className="font-sora font-bold text-navy m-0">
-            Enquête longitudinale (pré-test / post-test) ?
+            Back check / Contrôle croisé
           </p>
           <p className="text-xs text-gray-600 m-0 mt-1">
-            Vérifiez l'appariement des participants entre 2 phases de collecte
-            (recommandé pour VIH/SIDA, panels, cohortes).
+            Comparez votre enquête à une re-interview de contrôle (équipe indépendante)
+            pour détecter les enquêteurs qui bâclent ou fabriquent les réponses.
           </p>
         </div>
         <button
-          onClick={() => setShowPrePost(true)}
+          onClick={() => setShowBackCheck(true)}
           className="text-sm px-4 py-2 rounded-xl bg-purple-600 text-white hover:bg-purple-700 font-bold flex items-center gap-2 whitespace-nowrap"
         >
           Ouvrir l'outil

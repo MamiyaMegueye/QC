@@ -54,7 +54,7 @@ from core.qc_basic import (
 from core import ai_agent
 from core import analytical_report
 from core import qc_report
-from core import appariement
+from core import backcheck
 
 app = FastAPI(
     title="SISTA QC API",
@@ -522,8 +522,8 @@ def recompute_basic(session_id: str, duree_min: int = Form(18),
 async def preview_columns_only(data_file: UploadFile = File(...)):
     """Retourne juste la liste des colonnes d'un fichier (leger).
 
-    Utile pour l'appariement pre/post : l'utilisateur charge un fichier
-    et on affiche les colonnes disponibles pour choisir le code.
+    Utile pour le back check : l'utilisateur charge un fichier
+    et on affiche les colonnes disponibles pour choisir le code participant.
     """
     try:
         data_path = _save_upload(data_file)
@@ -539,51 +539,84 @@ async def preview_columns_only(data_file: UploadFile = File(...)):
         raise HTTPException(500, f"Erreur de lecture : {_clean_error_msg(e)}")
 
 
-@app.post("/api/compare-pre-post")
-async def compare_pre_post_endpoint(
-    pre_file: UploadFile = File(...),
-    post_file: UploadFile = File(...),
-    pre_code_cols: str = Form(...),   # JSON: string ou liste
-    post_code_cols: str = Form(...),  # JSON: string ou liste
-    pre_label: str = Form("Pré-test"),
-    post_label: str = Form("Post-test"),
+@app.post("/api/backcheck/common-columns")
+async def backcheck_common_columns(
+    main_file: UploadFile = File(...),
+    bc_file: UploadFile = File(...),
 ):
-    """Compare 2 fichiers (pre/post) et identifie les participants sans paire.
+    """Retourne les colonnes communes aux 2 fichiers avec detection du type
+    (numeric/categorical) et suggestion de tolerance par defaut.
 
-    Recommandation SISTA v2 pour les enquetes longitudinales (VIH/SIDA, panel, ...).
+    Etape prealable a la config des variables a comparer.
     """
     try:
-        pre_path = _save_upload(pre_file)
-        post_path = _save_upload(post_file)
+        main_path = _save_upload(main_file)
+        bc_path = _save_upload(bc_file)
+        result = backcheck.find_common_columns(main_path, bc_path)
+        return {"ok": True, **result}
+    except Exception as e:
+        raise HTTPException(500, f"Erreur de lecture : {_clean_error_msg(e)}")
+
+
+@app.post("/api/backcheck/run")
+async def backcheck_run_endpoint(
+    main_file: UploadFile = File(...),
+    bc_file: UploadFile = File(...),
+    main_code_cols: str = Form(...),     # JSON: string ou liste
+    bc_code_cols: str = Form(...),       # JSON: string ou liste
+    variables_config: str = Form(...),   # JSON: [{name, type, tolerance, tolerance_type}, ...]
+    main_enqueteur_col: str = Form(""),  # optionnel
+    main_label: str = Form("Enquete principale"),
+    bc_label: str = Form("Back check"),
+):
+    """Execute la comparaison back check (controle croise).
+
+    Compare les reponses de l'enquete principale a celles d'un back check
+    (re-interview courte par une equipe independante). Calcule les taux
+    de concordance par enqueteur, par variable et global.
+
+    Standard J-PAL / IPA / Banque Mondiale / DHS pour detecter la fraude
+    et le baclage d'enquete.
+    """
+    try:
+        main_path = _save_upload(main_file)
+        bc_path = _save_upload(bc_file)
 
         # Parser les codes (peut etre str ou list)
         try:
-            pre_cols = json.loads(pre_code_cols)
+            m_cols = json.loads(main_code_cols)
         except Exception:
-            pre_cols = pre_code_cols
+            m_cols = main_code_cols
         try:
-            post_cols = json.loads(post_code_cols)
+            b_cols = json.loads(bc_code_cols)
         except Exception:
-            post_cols = post_code_cols
+            b_cols = bc_code_cols
 
-        result = appariement.compare_pre_post(
-            pre_path=pre_path,
-            post_path=post_path,
-            pre_code_cols=pre_cols,
-            post_code_cols=post_cols,
-            pre_label=pre_label,
-            post_label=post_label,
+        # Parser la config des variables
+        try:
+            vars_cfg = json.loads(variables_config)
+            if not isinstance(vars_cfg, list) or len(vars_cfg) == 0:
+                raise ValueError("Aucune variable a comparer.")
+        except json.JSONDecodeError:
+            raise ValueError("Configuration des variables invalide (JSON malforme).")
+
+        result = backcheck.run_backcheck(
+            main_path=main_path,
+            bc_path=bc_path,
+            main_code_cols=m_cols,
+            bc_code_cols=b_cols,
+            main_enqueteur_col=main_enqueteur_col.strip() or None,
+            variables_config=vars_cfg,
+            main_label=main_label,
+            bc_label=bc_label,
         )
-
-        # Ajouter les noms de fichiers pour rappel
-        result["pre_filename"] = pre_file.filename
-        result["post_filename"] = post_file.filename
-
+        result["main_filename"] = main_file.filename
+        result["bc_filename"] = bc_file.filename
         return {"ok": True, **result}
     except ValueError as ve:
         raise HTTPException(400, str(ve))
     except Exception as e:
-        raise HTTPException(500, f"Erreur d'appariement : {_clean_error_msg(e)}")
+        raise HTTPException(500, f"Erreur back check : {_clean_error_msg(e)}")
 
 
 @app.post("/api/compute-duration-stats")

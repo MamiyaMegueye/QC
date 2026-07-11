@@ -109,7 +109,7 @@ export const api = {
   },
 
   // ====================================================================
-  //  Recommandation SISTA v2 : appariement pre/post (enquetes longitudinales)
+  //  Back check / Controle croise (methode J-PAL / IPA / Banque Mondiale)
   // ====================================================================
 
   previewColumnsOnly: async (dataFile) => {
@@ -127,15 +127,38 @@ export const api = {
     return res.json()
   },
 
-  comparePrePost: async ({ preFile, postFile, preCodeCols, postCodeCols, preLabel, postLabel }) => {
+  // Colonnes communes aux 2 fichiers avec detection automatique du type
+  backcheckCommonColumns: async (mainFile, bcFile) => {
     const formData = new FormData()
-    formData.append("pre_file", preFile)
-    formData.append("post_file", postFile)
-    formData.append("pre_code_cols", JSON.stringify(preCodeCols))
-    formData.append("post_code_cols", JSON.stringify(postCodeCols))
-    if (preLabel) formData.append("pre_label", preLabel)
-    if (postLabel) formData.append("post_label", postLabel)
-    const res = await fetch(`${API_URL}/api/compare-pre-post`, {
+    formData.append("main_file", mainFile)
+    formData.append("bc_file", bcFile)
+    const res = await fetch(`${API_URL}/api/backcheck/common-columns`, {
+      method: "POST",
+      body: formData,
+    })
+    if (!res.ok) {
+      let msg = `Erreur ${res.status}`
+      try { const d = await res.json(); msg = d.detail || msg } catch {}
+      throw new Error(msg)
+    }
+    return res.json()
+  },
+
+  // Execution de la comparaison back check
+  runBackcheck: async ({
+    mainFile, bcFile, mainCodeCols, bcCodeCols,
+    variablesConfig, mainEnqueteurCol, mainLabel, bcLabel,
+  }) => {
+    const formData = new FormData()
+    formData.append("main_file", mainFile)
+    formData.append("bc_file", bcFile)
+    formData.append("main_code_cols", JSON.stringify(mainCodeCols))
+    formData.append("bc_code_cols", JSON.stringify(bcCodeCols))
+    formData.append("variables_config", JSON.stringify(variablesConfig))
+    if (mainEnqueteurCol) formData.append("main_enqueteur_col", mainEnqueteurCol)
+    if (mainLabel) formData.append("main_label", mainLabel)
+    if (bcLabel) formData.append("bc_label", bcLabel)
+    const res = await fetch(`${API_URL}/api/backcheck/run`, {
       method: "POST",
       body: formData,
     })
