@@ -59,13 +59,43 @@ export default function QcAITab() {
   const [disabledRules, setDisabledRules] = useState(() => new Set())
 
   // ============================================================
-  //  Filtre par enqueteur (etat partage via zustand)
+  //  Filtre superviseur + enqueteur (etat partage via zustand)
+  //  -> cascade : superviseur choisi = enqueteurs de son equipe seulement
   // ============================================================
+  const selectedSuperviseur = useStore((s) => s.qcFilterSuperviseur)
+  const setSelectedSuperviseur = useStore((s) => s.setQcFilterSuperviseur)
   const selectedEnqueteur = useStore((s) => s.qcFilterEnqueteur)
   const setSelectedEnqueteur = useStore((s) => s.setQcFilterEnqueteur)
 
+  // Table enqueteur -> superviseur (union basiques + IA)
+  const enqToSup = useMemo(() => {
+    const map = new Map()
+    const addPair = (enq, sup) => {
+      if (!enq || enq === "—" || enq === "Inconnu" || !String(enq).trim()) return
+      if (!sup || sup === "—" || !String(sup).trim()) return
+      if (!map.has(String(enq))) map.set(String(enq), String(sup))
+    }
+    for (const r of store.results || []) {
+      for (const l of r.lignes || []) {
+        addPair(l._enqueteur, l._superviseur)
+      }
+    }
+    for (const l of store.aiResult?.lignes || []) {
+      addPair(l.Enqueteur, l.Superviseur)
+    }
+    return map
+  }, [store.results, store.aiResult])
+
+  // Liste unifiee des superviseurs
+  const uniqueSuperviseurs = useMemo(() => {
+    const set = new Set()
+    for (const sup of enqToSup.values()) set.add(sup)
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "fr", { numeric: true }))
+  }, [enqToSup])
+
   // Liste des enqueteurs presents dans les cas basiques + IA
   // (meme calcul que dans QcBasicTab pour une liste coherente entre onglets)
+  // Cascade : si un superviseur est selectionne, on ne garde que ses enqueteurs
   const uniqueEnqueteurs = useMemo(() => {
     const set = new Set()
     for (const r of store.results || []) {
@@ -82,10 +112,15 @@ export default function QcAITab() {
         set.add(String(enq))
       }
     }
-    return Array.from(set).sort((a, b) => a.localeCompare(b, "fr", { numeric: true }))
-  }, [store.results, store.aiResult])
+    let arr = Array.from(set)
+    if (selectedSuperviseur !== ALL_ENQ) {
+      arr = arr.filter((enq) => enqToSup.get(enq) === selectedSuperviseur)
+    }
+    return arr.sort((a, b) => a.localeCompare(b, "fr", { numeric: true }))
+  }, [store.results, store.aiResult, selectedSuperviseur, enqToSup])
 
-  const isFiltered = selectedEnqueteur !== ALL_ENQ
+  const isFiltered =
+    selectedSuperviseur !== ALL_ENQ || selectedEnqueteur !== ALL_ENQ
 
   const apiLabel = store.selectedApi === "api1" ? "API 1" : "API 2"
   const currentKey =
@@ -149,20 +184,23 @@ export default function QcAITab() {
   }
 
   // ─── Regrouper les cas par regle (indispensable pour l'agregation) ─
-  //     Applique le filtre enqueteur si actif : les cas d'un autre
-  //     enqueteur sont exclus AVANT le regroupement.
+  //     Applique les filtres superviseur + enqueteur si actifs.
   const casesByRule = useMemo(() => {
     const map = new Map()
     if (!store.aiResult?.lignes) return map
     for (const cas of store.aiResult.lignes) {
+      // Filtre superviseur
+      if (selectedSuperviseur !== ALL_ENQ &&
+          String(cas.Superviseur) !== selectedSuperviseur) continue
       // Filtre enqueteur
-      if (isFiltered && String(cas.Enqueteur) !== selectedEnqueteur) continue
+      if (selectedEnqueteur !== ALL_ENQ &&
+          String(cas.Enqueteur) !== selectedEnqueteur) continue
       const ri = cas._rule_idx
       if (!map.has(ri)) map.set(ri, [])
       map.get(ri).push(cas)
     }
     return map
-  }, [store.aiResult, isFiltered, selectedEnqueteur])
+  }, [store.aiResult, selectedSuperviseur, selectedEnqueteur])
 
   // ─── Liste des regles enrichie : avec n_cas + severite + filtrage texte ─
   const enrichedRules = useMemo(() => {
@@ -270,47 +308,86 @@ export default function QcAITab() {
       {store.aiResult && (
         <div className="slide-up">
           {/* ============================================================
-              BARRE DE FILTRE PAR ENQUETEUR
+              BARRE DE FILTRE : SUPERVISEUR + ENQUETEUR
               (partagee avec l'onglet QC basique via zustand)
               ============================================================ */}
-          {uniqueEnqueteurs.length > 0 && (
+          {(uniqueSuperviseurs.length > 0 || uniqueEnqueteurs.length > 0) && (
             <div className="bg-white border border-gray-200 rounded-2xl p-4 mb-4 shadow-sm">
               <div className="flex items-center gap-3 flex-wrap">
                 <div className="flex items-center gap-2 text-navy">
                   <Users className="w-5 h-5 text-gold" />
+                  <span className="font-sora font-bold text-sm">
+                    Filtrer par :
+                  </span>
+                </div>
+
+                {/* Dropdown superviseur */}
+                {uniqueSuperviseurs.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <label
+                      htmlFor="filter-superviseur-ai"
+                      className="text-sm text-gray-700 font-semibold"
+                    >
+                      Superviseur :
+                    </label>
+                    <select
+                      id="filter-superviseur-ai"
+                      value={selectedSuperviseur}
+                      onChange={(e) => {
+                        setSelectedSuperviseur(e.target.value)
+                        setExpandedRules(new Set())
+                      }}
+                      className="min-w-[160px] border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:border-gold focus:ring-2 focus:ring-gold/20 outline-none"
+                    >
+                      <option value={ALL_ENQ}>
+                        Tous ({uniqueSuperviseurs.length})
+                      </option>
+                      {uniqueSuperviseurs.map((sup) => (
+                        <option key={sup} value={sup}>
+                          {sup}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Dropdown enqueteur */}
+                <div className="flex items-center gap-2">
                   <label
                     htmlFor="filter-enqueteur-ai"
-                    className="font-sora font-bold text-sm"
+                    className="text-sm text-gray-700 font-semibold"
                   >
-                    Filtrer par enquêteur :
+                    Enquêteur :
                   </label>
-                </div>
-                <select
-                  id="filter-enqueteur-ai"
-                  value={selectedEnqueteur}
-                  onChange={(e) => {
-                    setSelectedEnqueteur(e.target.value)
-                    setExpandedRules(new Set())
-                  }}
-                  className="flex-1 min-w-[180px] max-w-xs border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:border-gold focus:ring-2 focus:ring-gold/20 outline-none"
-                >
-                  <option value={ALL_ENQ}>
-                    Tous les enquêteurs ({uniqueEnqueteurs.length})
-                  </option>
-                  {uniqueEnqueteurs.map((enq) => (
-                    <option key={enq} value={enq}>
-                      {enq}
+                  <select
+                    id="filter-enqueteur-ai"
+                    value={selectedEnqueteur}
+                    onChange={(e) => {
+                      setSelectedEnqueteur(e.target.value)
+                      setExpandedRules(new Set())
+                    }}
+                    className="min-w-[160px] border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:border-gold focus:ring-2 focus:ring-gold/20 outline-none"
+                    disabled={uniqueEnqueteurs.length === 0}
+                  >
+                    <option value={ALL_ENQ}>
+                      Tous ({uniqueEnqueteurs.length})
                     </option>
-                  ))}
-                </select>
+                    {uniqueEnqueteurs.map((enq) => (
+                      <option key={enq} value={enq}>
+                        {enq}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 {isFiltered && (
                   <button
                     onClick={() => {
-                      setSelectedEnqueteur(ALL_ENQ)
+                      setSelectedSuperviseur(ALL_ENQ)   // reset superviseur ET enqueteur (via cascade)
                       setExpandedRules(new Set())
                     }}
                     className="text-xs px-3 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 font-bold flex items-center gap-1"
-                    title="Réinitialiser le filtre"
+                    title="Réinitialiser tous les filtres"
                   >
                     <X className="w-3.5 h-3.5" />
                     Réinitialiser
@@ -321,8 +398,12 @@ export default function QcAITab() {
                 <p className="text-xs text-gray-500 mt-3 mb-0 italic flex items-start gap-1">
                   <Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
                   <span>
-                    Affichage limité aux cas de <strong>{selectedEnqueteur}</strong>.
-                    Ce filtre s'applique aussi à l'onglet QC basique.
+                    Affichage limité{" "}
+                    {selectedEnqueteur !== ALL_ENQ
+                      ? <>aux cas de <strong>{selectedEnqueteur}</strong></>
+                      : <>à l'équipe <strong>{selectedSuperviseur}</strong></>
+                    }
+                    . Ce filtre s'applique aussi à l'onglet QC basique.
                   </span>
                 </p>
               )}
@@ -464,16 +545,19 @@ export default function QcAITab() {
             </div>
           </div>
 
-          {/* Cas particulier : enqueteur sans aucun cas IA */}
+          {/* Cas particulier : selection sans aucun cas IA */}
           {isFiltered && totalCasActifs === 0 && totalCasMasques === 0 && (
             <div className="bg-green-50 border-l-4 border-green-500 rounded-r-xl p-4 mb-3 flex items-start gap-3">
               <Sparkles className="w-6 h-6 text-green-700 flex-shrink-0 mt-0.5" />
               <div>
                 <p className="font-sora font-bold text-green-900 m-0">
-                  Aucune incohérence IA détectée pour {selectedEnqueteur}
+                  Aucune incohérence IA détectée pour{" "}
+                  {selectedEnqueteur !== ALL_ENQ
+                    ? selectedEnqueteur
+                    : "l'équipe " + selectedSuperviseur}
                 </p>
                 <p className="text-sm text-green-800 mt-1 m-0">
-                  Cet enquêteur ne présente aucun cas dans les règles générées par l'IA.
+                  Aucun cas trouvé dans les règles générées par l'IA.
                 </p>
               </div>
             </div>

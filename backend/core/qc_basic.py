@@ -69,6 +69,19 @@ def auto_map(columns):
             r"nom[_-]?(?:enqu|agent|operat|releveur|collecteur|enumer|surveyor|interv)",
             r"id[_-]?(?:enqu|agent|operat|releveur|collecteur|enumer|surveyor|interv)",
         ]),
+        "superviseur": find([
+            # Français
+            r"superviseur", r"superv",
+            r"chef[_-]?(?:equipe|[ée]quipe|terrain|mission|zone)",
+            r"contr[oô]leur", r"encadrant",
+            # Anglais
+            r"supervisor", r"team[_-]?(?:lead|leader|chief)",
+            r"controller", r"field[_-]?manager",
+            # Abréviations
+            r"\bsup[_-]?(?:name|nom|id|code)\b",
+            r"nom[_-]?(?:superv|supervis|chef|contr)",
+            r"id[_-]?(?:superv|supervis|chef|contr)",
+        ]),
         "id": find([
             r"id.?progres", r"^id$", r"identifiant",
             r"m[ée]nage.*id", r"hh.?id", r"uuid", r"num.*quest",
@@ -116,6 +129,12 @@ def _parse_dt(v):
 
 def _enq(row, mp):
     col = mp.get("enqueteur")
+    return str(row[col]) if col and col in row and not _is_empty(row[col]) else "—"
+
+
+def _sup(row, mp):
+    """Retourne le superviseur/chef d'equipe de la ligne, ou "—" si non defini."""
+    col = mp.get("superviseur")
     return str(row[col]) if col and col in row and not _is_empty(row[col]) else "—"
 
 
@@ -238,7 +257,9 @@ def test_doublons_lignes(df, mp, profile, params):
     for idx in df[dup_mask].index:
         row = df.loc[idx]
         lignes.append({"_index": int(idx) + 1, "Enquêteur": _enq(row, mp),
-                       "_enqueteur": _enq(row, mp), "_probleme": "Ligne entièrement dupliquée"})
+                       "_enqueteur": _enq(row, mp),
+                       "_superviseur": _sup(row, mp),
+                       "_probleme": "Ligne entièrement dupliquée"})
     return _result("doublons_lignes", "Lignes entièrement dupliquées", "high",
                    "Deux lignes identiques sur toutes les colonnes = saisie en double.",
                    "Copier-coller, soumission répétée, ou import en double.",
@@ -269,6 +290,7 @@ def test_id_duplique(df, mp, profile, params):
             lignes.append({"_index": int(idx) + 1, "Identifiant": display_v,
                            "Enquêteur": _enq(row, mp),
                            "_enqueteur": _enq(row, mp),
+                           "_superviseur": _sup(row, mp),
                            "_probleme": f"ID duplique ({dups[v]} occurrences)"})
 
     titre = (f"Identifiant compose duplique ({len(dups)} occurrence(s)) — {id_label}"
@@ -296,7 +318,9 @@ def test_valeurs_manquantes(df, mp, profile, params):
         lignes.append({"Variable": v["name"], "Libellé": v["label"][:40],
                        "Taux remplissage": f"{v['fill_rate']}%",
                        "Manquants": v["n_missing"],
-                       "_enqueteur": "—", "_probleme": f"Seulement {v['fill_rate']}% rempli"})
+                       "_enqueteur": "—",
+                       "_superviseur": "—",
+                       "_probleme": f"Seulement {v['fill_rate']}% rempli"})
     return _result("valeurs_manquantes", f"Variables peu remplies (< {seuil}%)", "med",
                    "Une variable très peu remplie est souvent inexploitable.",
                    "Question sautée systématiquement, filtre, ou bug de collecte.",
@@ -327,7 +351,9 @@ def test_outliers(df, mp, profile, params):
                 row = df.loc[idx]
                 lignes.append({"_index": int(idx) + 1, "Variable": col, "Valeur": val,
                                "Plage normale": f"{round(low,1)} → {round(high,1)}",
-                               "Enquêteur": _enq(row, mp), "_enqueteur": _enq(row, mp),
+                               "Enquêteur": _enq(row, mp),
+                               "_enqueteur": _enq(row, mp),
+                               "_superviseur": _sup(row, mp),
                                "_probleme": f"Valeur extrême sur {col}"})
     return _result("outliers", "Valeurs aberrantes (outliers)", "low",
                    "Une valeur très éloignée de la distribution (méthode IQR) peut être une faute de frappe.",
@@ -351,7 +377,9 @@ def test_duree_courte(df, mp, profile, params):
         if 0 <= dur < seuil:
             row = df.loc[idx]
             lignes.append({"_index": int(idx) + 1, "Enquêteur": _enq(row, mp),
-                           "Durée (min)": int(dur), "_enqueteur": _enq(row, mp),
+                           "Durée (min)": int(dur),
+                           "_enqueteur": _enq(row, mp),
+                           "_superviseur": _sup(row, mp),
                            "_probleme": f"Durée {int(dur)} min < {seuil} min"})
     return _result("duree_courte", f"Durée d'observation < {seuil} min", "high",
                    f"Une observation trop courte (< {seuil} min) est suspecte : questions sautées ou fabrication.",
@@ -377,7 +405,9 @@ def test_intervalle_starts(df, mp, profile, params):
                 ecart = (row["_dt"] - prev).total_seconds() / 60
                 if 0 <= ecart < seuil:
                     lignes.append({"_index": int(idx) + 1, "Enquêteur": str(enq),
-                                   "Écart (min)": int(ecart), "_enqueteur": str(enq),
+                                   "Écart (min)": int(ecart),
+                                   "_enqueteur": str(enq),
+                                   "_superviseur": _sup(row, mp),
                                    "_probleme": f"Écart {int(ecart)} min < {seuil} min"})
             prev = row["_dt"]
     return _result("intervalle_starts", f"Intervalle entre observations < {seuil} min", "med",
@@ -397,6 +427,7 @@ def test_gps_manquant(df, mp, profile, params):
             row = df.loc[idx]
             lignes.append({"_index": int(idx) + 1, "Enquêteur": _enq(row, mp),
                            "_enqueteur": _enq(row, mp),
+                           "_superviseur": _sup(row, mp),
                            "_probleme": "GPS manquant — position non enregistrée"})
     return _result("gps_manquant", "Coordonnées GPS manquantes", "med",
                    "Sans GPS, impossible de vérifier que l'observation a eu lieu au bon endroit.",
@@ -413,7 +444,9 @@ def test_constantes(df, mp, profile, params):
             continue
         if v["uniques"] == 1 and v["n_filled"] > 1:
             lignes.append({"Variable": v["name"], "Valeur unique": v["examples"][0] if v["examples"] else "",
-                           "_enqueteur": "—", "_probleme": "Variable constante (1 seule valeur)"})
+                           "_enqueteur": "—",
+                           "_superviseur": "—",
+                           "_probleme": "Variable constante (1 seule valeur)"})
     return _result("constantes", "Variables constantes", "low",
                    "Une variable qui ne prend qu'une valeur n'apporte aucune information.",
                    "Question mal configurée ou réponse forcée.",

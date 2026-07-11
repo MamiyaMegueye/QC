@@ -218,6 +218,25 @@ function ColumnMappingCard() {
         </p>
       </div>
 
+      {/* --- Superviseur / chef d'equipe --- */}
+      <div className="mb-2">
+        <label className="label-text">Superviseur / chef d'équipe (optionnel)</label>
+        <select
+          className="input-field"
+          value={store.columnMapping.superviseur || ""}
+          onChange={(e) => store.setColumnMappingField("superviseur", e.target.value)}
+        >
+          <option value="">— Aucun —</option>
+          {store.previewColumns.map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
+        <p className="text-xs text-gray-500 mt-1 m-0">
+          Colonne identifiant le superviseur ou chef d'équipe. Permet de filtrer les
+          anomalies par équipe (superviseur → ses enquêteurs) dans les onglets de contrôle qualité.
+        </p>
+      </div>
+
       {/* --- Metadonnees repliables --- */}
       <div className="mt-4 border-t border-gray-200 pt-3">
         <button

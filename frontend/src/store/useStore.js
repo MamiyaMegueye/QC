@@ -18,6 +18,7 @@ const isAuthFromStorage = () => {
 
 const EMPTY_MAPPING = {
   enqueteur: "",
+  superviseur: "",
   id: "",
   start: "",
   end: "",
@@ -195,6 +196,7 @@ export const useStore = create((set, get) => ({
       qcMetadata: { ...EMPTY_QC_METADATA },
       qcReportError: null,
       qcFilterEnqueteur: "__all__",
+      qcFilterSuperviseur: "__all__",
     }),
 
   // Resultats IA
@@ -222,6 +224,15 @@ export const useStore = create((set, get) => ({
   // ====================================================================
   qcFilterEnqueteur: "__all__",
   setQcFilterEnqueteur: (v) => set({ qcFilterEnqueteur: v || "__all__" }),
+
+  // Filtre superviseur (partage aussi, cascade avec le filtre enqueteur)
+  qcFilterSuperviseur: "__all__",
+  setQcFilterSuperviseur: (v) =>
+    set({
+      qcFilterSuperviseur: v || "__all__",
+      // Changer de superviseur invalide le choix d'enqueteur
+      qcFilterEnqueteur: "__all__",
+    }),
 
   // ====================================================================
   //  POINT 5 SISTA : workflow de validation + rapport QC
@@ -308,6 +319,7 @@ export const useStore = create((set, get) => ({
       qcReportError: null,
       qcReportLoading: false,
       qcFilterEnqueteur: "__all__",
+      qcFilterSuperviseur: "__all__",
     }),
 
   // ====================================================================

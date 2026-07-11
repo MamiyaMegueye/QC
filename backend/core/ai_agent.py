@@ -36,7 +36,7 @@ TPM_LIMIT_GROQ = 11000
 API_CONFIG = {
     "api1": {
         "model_fast":  "claude-haiku-4-5",
-        "model_smart": "claude-opus-4-6",   # ← changé ici
+        "model_smart": "claude-sonnet-4-6",
         "key_prefix":  "sk-ant-",
     },
     "api2": {
@@ -685,6 +685,7 @@ def run_rules(df: pd.DataFrame, rules: list, mp: dict) -> dict:
     """Execute les regles sur le DataFrame complet."""
     rows_out = []
     enqueteur_col = mp.get("enqueteur")
+    superviseur_col = mp.get("superviseur")
     cas_par_regle = {}
 
     for rule_idx, rule in enumerate(rules):
@@ -719,6 +720,10 @@ def run_rules(df: pd.DataFrame, rules: list, mp: dict) -> dict:
                     "Enqueteur": (str(df.loc[idx, enqueteur_col])
                                   if enqueteur_col and enqueteur_col in df.columns
                                   else "Inconnu"),
+                    "Superviseur": (str(df.loc[idx, superviseur_col])
+                                    if superviseur_col and superviseur_col in df.columns
+                                    and pd.notna(df.loc[idx, superviseur_col])
+                                    else "—"),
                     "Regle": rule["description"],
                     "Colonnes_concernees": ", ".join(cols_in_rule),
                     "Valeurs": " | ".join(f"{k}={v}" for k, v in valeurs.items()),
