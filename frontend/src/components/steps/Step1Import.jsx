@@ -768,8 +768,7 @@ export default function Step1Import() {
             Back check / Contrôle croisé
           </p>
           <p className="text-xs text-gray-600 m-0 mt-1">
-            Comparez votre enquête à une re-interview de contrôle (équipe indépendante)
-            pour détecter les enquêteurs qui bâclent ou fabriquent les réponses.
+            Comparez votre enquête à une re-interview de contrôle .
           </p>
         </div>
         <button
