@@ -837,7 +837,7 @@ export default function Step1Import() {
                     : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                 }`}
               >
-                {apiName === "api1" ? "API 1 (Plus efficace)" : "API 2 (Plus rapide)"}
+                {apiName === "api1" ? "API 1 (Plus efficace)" : "API 2 "}
                 {configured && (
                   <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-green-400"
                     title="Clé chargée" />
