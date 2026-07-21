@@ -37,6 +37,7 @@ API_CONFIG = {
     "api1": {
         "model_fast":  "claude-haiku-4-5",
         "model_smart": "claude-sonnet-4-6",
+        "model_opus":  "claude-opus-4-6",
         "key_prefix":  "sk-ant-",
     },
     "api2": {
@@ -583,6 +584,8 @@ def generate_rules(api: str,
     total_out_tokens = 0
     total_duration = 0.0
     model = API_CONFIG[api]["model_smart"]
+    model_primary = API_CONFIG[api].get("model_opus") or model
+    models_used = set()
 
     for idx, batch in enumerate(batches, 1):
         if progress_callback:
@@ -626,8 +629,20 @@ def generate_rules(api: str,
             )
 
         try:
-            result = _call_with_retry(api, api_key, model,
-                                       system_rules_final, user_prompt, max_tokens=6000)
+            try:
+                result = _call_with_retry(api, api_key, model_primary,
+                                           system_rules_final, user_prompt, max_tokens=6000)
+                models_used.add(model_primary)
+            except Exception as e_primary:
+                if model_primary == model:
+                    raise
+                if progress_callback:
+                    progress_callback(
+                        f"Lot {idx} : Opus indisponible ({e_primary}), bascule sur Sonnet"
+                    )
+                result = _call_with_retry(api, api_key, model,
+                                           system_rules_final, user_prompt, max_tokens=6000)
+                models_used.add(model)
             data = _extract_json(result["text"])
             batch_rules = data.get("regles", [])
             batch_comment = data.get("commentaire", "")
@@ -668,7 +683,7 @@ def generate_rules(api: str,
     global_comment = " ".join(all_comments)[:600] if all_comments else ""
 
     metrics = {
-        "model": model,
+        "model": " + ".join(sorted(models_used)) if models_used else model,
         "duration": round(total_duration, 2),
         "input_tokens": total_in_tokens,
         "output_tokens": total_out_tokens,
