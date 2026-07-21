@@ -567,6 +567,15 @@ def generate_rules(api: str,
             f"(duree estimee : {est_min}-{est_max} minutes)"
         )
 
+    # Enrichir le contexte si le fichier est un Spotcheck
+    from . import spotcheck as spotcheck_module
+    system_rules_final = SYSTEM_RULES
+    if df is not None:
+        spotcheck_info = spotcheck_module.analyze_spotcheck(df)
+        spotcheck_context = spotcheck_module.build_ai_context_from_spotcheck(spotcheck_info)
+        if spotcheck_context:
+            system_rules_final = SYSTEM_RULES + "\n\n" + spotcheck_context
+
     # 5. Appeler l'IA pour chaque lot
     all_rules = []
     all_comments = []
@@ -592,7 +601,7 @@ def generate_rules(api: str,
             enqueteur_col_hint=enqueteur_col_hint,
         )
 
-        estimated = _estimate_tokens(SYSTEM_RULES + user_prompt)
+        estimated = _estimate_tokens(system_rules_final + user_prompt)
         if api == "api2" and estimated > TPM_LIMIT_GROQ:
             user_prompt = _build_user_prompt(
                 batch, survey_type, survey_description, dict_extract,
@@ -603,7 +612,7 @@ def generate_rules(api: str,
                 batch_info=batch_info,
                 enqueteur_col_hint=enqueteur_col_hint,
             )
-            estimated = _estimate_tokens(SYSTEM_RULES + user_prompt)
+            estimated = _estimate_tokens(system_rules_final + user_prompt)
 
         if api == "api2" and estimated > TPM_LIMIT_GROQ:
             user_prompt = _build_user_prompt(
@@ -618,7 +627,7 @@ def generate_rules(api: str,
 
         try:
             result = _call_with_retry(api, api_key, model,
-                                       SYSTEM_RULES, user_prompt, max_tokens=6000)
+                                       system_rules_final, user_prompt, max_tokens=6000)
             data = _extract_json(result["text"])
             batch_rules = data.get("regles", [])
             batch_comment = data.get("commentaire", "")

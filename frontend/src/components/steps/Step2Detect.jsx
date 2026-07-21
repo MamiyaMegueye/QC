@@ -9,6 +9,8 @@ export default function Step2Detect() {
   const [activeTab, setActiveTab] = useState("apercu")
   const profile = useStore((s) => s.profile)
   const setStep = useStore((s) => s.setStep)
+  const spotcheckInfo = useStore((s) => s.spotcheckInfo)
+  const sessionId = useStore((s) => s.sessionId)
 
   if (!profile) {
     return (
@@ -31,6 +33,24 @@ export default function Step2Detect() {
 
   return (
     <div className="slide-up">
+      {spotcheckInfo?.available && (
+        <div className="bg-purple-50 border border-purple-200 rounded-lg px-3 py-2 mb-3 inline-flex items-center gap-2 text-sm">
+          <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
+          <span className="text-purple-900 font-semibold">
+            Format Spotcheck détecté ({Math.round(spotcheckInfo.detection.confidence * 100)}% confiance)
+          </span>
+          <button
+            onClick={async () => {
+              const url = `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/session/${sessionId}/spotcheck-report`
+              window.open(url, '_blank')
+            }}
+            className="ml-2 text-xs px-3 py-1 rounded bg-purple-600 text-white hover:bg-purple-700 font-bold"
+          >
+            Télécharger rapport Spotcheck
+          </button>
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="flex gap-1.5 mb-0">
         {TABS.map((tab) => (

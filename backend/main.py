@@ -20,7 +20,6 @@ v1.4.0 (recommandations SISTA) :
   - apply_id_declaration() est appele pour forcer le type "identifiant"
     sur la colonne declaree et retyper les autres
 """
-
 from __future__ import annotations
 
 import io
@@ -33,7 +32,7 @@ from typing import Optional
 import pandas as pd
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
 from pydantic import BaseModel
 
 try:
@@ -55,6 +54,7 @@ from core import ai_agent
 from core import analytical_report
 from core import qc_report
 from core import backcheck
+from core import spotcheck, spotcheck_report
 
 app = FastAPI(
     title="SISTA QC API",
@@ -320,9 +320,13 @@ async def analyze(
         results, mp = run_basic_qc(loaded, profile, mp=final_mp, params=params)
         stats = global_stats(profile, results)
 
+        # Detection auto Spotcheck (silencieuse)
+        spotcheck_info = spotcheck.analyze_spotcheck(loaded.df)
+
         session_id = str(uuid.uuid4())
         _save_session(session_id, {
             "loaded": loaded,
+            "df": loaded.df,
             "profile": profile,
             "results": results,
             "mp": mp,
@@ -335,6 +339,7 @@ async def analyze(
             "ai_comment": None,
             "ai_metrics": None,
             "report_content": None,
+            "spotcheck_info": spotcheck_info,
             # Point 5 SISTA : workflow de validation + rapport QC
             "validations": {},      # { 'basic:doublons_lignes': {status, comment}, ... }
             "qc_metadata": {},      # { responsable_qc, fonction, date_validation, ... }
@@ -369,6 +374,7 @@ async def analyze(
             },
             "mp": mp,
             "preview": preview,
+            "spotcheck_info": spotcheck_info,
         }
     except Exception as e:
         raise HTTPException(500, f"Erreur d'analyse : {e}")
@@ -846,6 +852,47 @@ def generate_qc_report_endpoint(session_id: str, req: GenerateQcReportRequest):
         )
     except Exception as e:
         raise HTTPException(500, f"Erreur de generation du rapport QC : {_clean_error_msg(e)}")
+
+
+@app.get("/api/session/{session_id}/spotcheck-report")
+async def get_spotcheck_report(session_id: str):
+    """Genere le rapport analytique Spotcheck (avec IA)."""
+    sess = SESSIONS.get(session_id)
+    if not sess:
+        raise HTTPException(404, "Session introuvable")
+
+    df = sess.get("df")
+    if df is None:
+        raise HTTPException(400, "Aucune donnee dans la session")
+
+    try:
+        import tempfile
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".docx")
+        tmp.close()
+
+        metadata = sess.get("qc_metadata", {})
+        report_meta = {
+            "programme": "Tekavoul",
+            "projet": "PASyFiS II",
+            "bureau": "SISTA Consult",
+            "zone": metadata.get("zone", "Nouakchott"),
+            "periode": metadata.get("periode", ""),
+        }
+
+        spotcheck_report.generate_spotcheck_report(
+            df=df,
+            output_path=tmp.name,
+            metadata=report_meta,
+        )
+        return FileResponse(
+            tmp.name,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            filename="Rapport_Spotcheck.docx",
+        )
+    except ValueError as ve:
+        raise HTTPException(400, str(ve))
+    except Exception as e:
+        raise HTTPException(500, f"Erreur generation : {_clean_error_msg(e)}")
 
 
 @app.delete("/api/session/{session_id}")

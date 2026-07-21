@@ -29,6 +29,8 @@ import numpy as np
 import re
 from datetime import datetime
 
+from . import spotcheck as spotcheck_module
+
 
 # ----------------------------------------------------------------------
 #  Détection automatique des colonnes-clés (heuristique, sans IA)
@@ -479,6 +481,9 @@ def run_basic_qc(loaded, profile, mp=None, params=None):
             results.append({"id": t.__name__, "titre": t.__name__, "severite": "ok",
                             "explication": {"pourquoi": f"Test non exécuté : {e}", "cause": "", "action": ""},
                             "n_cas": 0, "lignes": [], "colonnes": []})
+    # Tests specifiques Spotcheck si detecte (utilise les bornes min/max)
+    results.extend(spotcheck_module.run_spotcheck_tests(df, mp))
+
     return results, mp
 
 
