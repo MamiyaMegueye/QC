@@ -29,7 +29,7 @@ function EditableInterpretation({ value, onChange }) {
       <div className="bg-yellow-50 border-l-4 border-gold rounded-r-lg p-4 my-3">
         <div className="flex items-center gap-2 mb-2 text-xs font-bold text-gold-deep uppercase">
           <Pencil className="w-3 h-3" />
-          Edition de l'interpretation
+          Édition de l'interprétation
         </div>
         <textarea
           value={draft}
@@ -63,13 +63,13 @@ function EditableInterpretation({ value, onChange }) {
       title="Cliquer pour modifier"
     >
       <div className="flex items-center gap-2 mb-1 text-xs font-bold text-gold-deep uppercase">
-        Interpretation IA
+        Interprétation IA
         <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
       </div>
       <p className="text-sm font-serif text-navy-deep m-0 leading-relaxed">
         {value || (
           <span className="italic text-gray-400">
-            (Aucune interpretation - cliquer pour ajouter)
+            (Aucune interprétation - cliquer pour ajouter)
           </span>
         )}
       </p>
@@ -88,7 +88,7 @@ function UnivariateSection({ uni, onUpdate }) {
         {uni.label}
       </h3>
       <p className="text-xs text-gray-500 m-0 mb-3 italic">
-        Variable : {uni.name} | Type : {uni.type} | Reponses : {uni.n} ({uni.fill_rate}%)
+        Variable : {uni.name} | Type : {uni.type} | Réponses : {uni.n} ({uni.fill_rate}%)
       </p>
 
       {uni.error ? (
@@ -227,8 +227,7 @@ export default function Step4AnalyticalReport() {
   useEffect(() => {
     if (!store.sessionId) return
     setScopeLoading(true)
-    fetch(`${import.meta.env.VITE_API_URL || "http://localhost:8000"}/api/session/${store.sessionId}/analysis-scope`)
-      .then((r) => r.ok ? r.json() : null)
+    api.analysisScope(store.sessionId)
       .then((data) => {
         if (data) setAnalysisScope(data)
       })
@@ -240,7 +239,7 @@ export default function Step4AnalyticalReport() {
     return (
       <div className="card text-center">
         <p className="text-gray-600 mb-4">
-          Veuillez d'abord importer un fichier a l'etape 1.
+          Veuillez d'abord importer un fichier à l'étape 1.
         </p>
         <button onClick={() => store.setStep(1)} className="btn-secondary">
           <ArrowLeft className="w-4 h-4 inline mr-1" /> Retour
@@ -292,7 +291,7 @@ export default function Step4AnalyticalReport() {
       a.remove()
       window.URL.revokeObjectURL(url)
     } catch (e) {
-      setError(e.message || "Erreur de telechargement")
+      setError(e.message || "Erreur de téléchargement")
     } finally {
       setIsDownloading(false)
     }
@@ -327,8 +326,8 @@ export default function Step4AnalyticalReport() {
           Rapport analytique
         </h3>
         <p className="card-desc">
-          Generer un rapport Word professionnel avec logo SISTA, tableaux,
-          graphiques et interpretations redigees par l'IA.
+          Générer un rapport Word professionnel avec logo SISTA, tableaux,
+          graphiques et interprétations rédigées par l'IA.
         </p>
 
         <div className="bg-gradient-to-r from-navy to-navy-deep text-white rounded-2xl p-6 mb-6">
@@ -340,7 +339,7 @@ export default function Step4AnalyticalReport() {
               </h4>
             
               <p className="mt-3 text-sm text-gold">
-                Vous pourrez modifier les interpretations IA avant de telecharger le Word.
+                Vous pourrez modifier les interprétations IA avant de télécharger le Word.
               </p>
             </div>
           </div>
@@ -350,7 +349,7 @@ export default function Step4AnalyticalReport() {
         {scopeLoading && (
           <div className="bg-gray-50 rounded-2xl p-4 mb-6 flex items-center gap-3 text-gray-600">
             <Loader2 className="w-5 h-5 animate-spin" />
-            <span className="text-sm">Calcul du perimetre d'analyse...</span>
+            <span className="text-sm">Calcul du périmètre d'analyse...</span>
           </div>
         )}
 
@@ -360,15 +359,15 @@ export default function Step4AnalyticalReport() {
               <div className="flex items-center gap-3 mb-2">
                 <BarChart3 className="w-6 h-6 text-navy" />
                 <h4 className="font-sora font-bold text-navy m-0 text-base">
-                  Perimetre du rapport client
+                  Périmètre du rapport client
                 </h4>
               </div>
               <p className="text-sm text-gray-700 m-0">
                 Le rapport est destine au <strong>commanditaire de l'enquete</strong> 
                 {" "}(l'entreprise / l'organisation qui a commande la collecte). Seules les
-                variables a valeur metier seront analysees. Les colonnes techniques de pilotage
+                variables à valeur métier seront analysees. Les colonnes techniques de pilotage
                 interne SISTA (identifiant, enqueteur, horodatages, GPS, commentaires libres,
-                contacts) sont automatiquement ecartees.
+                contacts) sont automatiquement écartées.
               </p>
             </div>
 
@@ -410,9 +409,9 @@ export default function Step4AnalyticalReport() {
                     </p>
                     <p className="text-amber-800 text-xs mt-1 m-0">
                       Le rapport client sera limite avec seulement {analysisScope.n_retained} variable(s)
-                      retenue(s). Verifiez que votre fichier contient bien des variables metier
+                      retenue(s). Vérifiez que votre fichier contient bien des variables métier
                       (sociodemographiques, opinions, comportements) et pas uniquement des
-                      metadonnees de collecte.
+                      métadonnées de collecte.
                     </p>
                   </div>
                 </div>
@@ -424,10 +423,10 @@ export default function Step4AnalyticalReport() {
               >
                 <span className="flex items-center gap-2">
                   {scopeExpanded ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  {scopeExpanded ? "Masquer" : "Voir le detail"} des variables retenues et ecartees
+                  {scopeExpanded ? "Masquer" : "Voir le détail"} des variables retenues et écartées
                 </span>
                 <span className="text-xs text-gray-500 font-normal">
-                  ({analysisScope.n_retained} OK · {analysisScope.n_excluded} ecartees)
+                  ({analysisScope.n_retained} OK · {analysisScope.n_excluded} écartées)
                 </span>
               </button>
 
@@ -460,7 +459,7 @@ export default function Step4AnalyticalReport() {
                   {/* Variables exclues */}
                   <div>
                     <p className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2 m-0">
-                      Variables ecartees ({analysisScope.n_excluded})
+                      Variables écartées ({analysisScope.n_excluded})
                     </p>
                     <div className="bg-gray-50 border border-gray-200 rounded-xl p-2 max-h-72 overflow-y-auto">
                       {analysisScope.excluded.length === 0 ? (
@@ -497,15 +496,15 @@ export default function Step4AnalyticalReport() {
             transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
         >
           <Sparkles className="w-6 h-6" />
-          Generer l'apercu du rapport
+          Générer l'aperçu du rapport
         </button>
         {analysisScope && analysisScope.n_retained === 0 && (
           <p className="text-xs text-red-700 text-center mt-2">
-            Aucune variable metier analysable. Verifiez le fichier ou le mapping des colonnes-cles.
+            Aucune variable métier analysable. Vérifiez le fichier ou le mapping des colonnes-clés.
           </p>
         )}
         <p className="text-xs text-gray-500 text-center mt-3">
-          La generation peut prendre 30 a 90 secondes
+          La génération peut prendre 1 à 3 minutes selon la taille du fichier
         </p>
 
         {error && (
@@ -526,10 +525,10 @@ export default function Step4AnalyticalReport() {
       <div className="card slide-up text-center">
         <Loader2 className="w-12 h-12 text-navy animate-spin mx-auto mb-4" />
         <h3 className="font-sora font-bold text-navy text-xl mb-2">
-          Generation du rapport en cours...
+          Génération du rapport en cours...
         </h3>
         <p className="text-gray-600 mb-6">
-          L'IA analyse vos donnees et redige les interpretations.
+          L'IA analyse vos données et rédige les interpretations.
         </p>
 
         <div className="bg-beige rounded-xl p-4 border border-gray-200 text-left max-w-2xl mx-auto">
@@ -562,9 +561,9 @@ export default function Step4AnalyticalReport() {
       <div className="sticky top-0 z-20 bg-white rounded-2xl p-4 mb-4 shadow-card border border-gray-200 flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2">
           <Sparkles className="w-5 h-5 text-gold" />
-          <span className="font-sora font-bold text-navy">Apercu du rapport</span>
+          <span className="font-sora font-bold text-navy">Aperçu du rapport</span>
           <span className="text-xs text-gray-500 ml-2">
-            (clic sur une interpretation pour la modifier)
+            (cliquez sur une interprétation pour la modifier)
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -577,7 +576,7 @@ export default function Step4AnalyticalReport() {
             className="flex items-center gap-1.5 px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-bold text-sm transition-colors disabled:opacity-50"
           >
             <RefreshCw className="w-4 h-4" />
-            Regenerer
+            Régénérer
           </button>
           <button
             onClick={handleDownload}
@@ -587,12 +586,12 @@ export default function Step4AnalyticalReport() {
             {isDownloading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                Telechargement...
+                Téléchargement...
               </>
             ) : (
               <>
                 <Download className="w-4 h-4" />
-                Telecharger en Word
+                Télécharger en Word
               </>
             )}
           </button>
@@ -610,7 +609,7 @@ export default function Step4AnalyticalReport() {
       <div className="bg-white rounded-2xl p-12 mb-4 border-2 border-navy shadow-lg text-center relative overflow-hidden">
         <div className="absolute top-0 left-0 right-0 h-2 bg-gold"></div>
         <img
-          src="/sista_logo.png"
+          src="/logo_sista.png"
           alt="SISTA"
           className="w-24 h-auto mx-auto mb-8"
           onError={(e) => { e.target.style.display = "none" }}
@@ -619,7 +618,7 @@ export default function Step4AnalyticalReport() {
           RAPPORT ANALYTIQUE
         </h1>
         <p className="text-gold-deep text-xl italic mb-8">
-          {content.meta.survey_context?.type || "Enquete"}
+          {content.meta.survey_context?.type || "Enquête"}
         </p>
         <div className="max-w-md mx-auto text-left space-y-2 text-sm bg-beige p-4 rounded-lg">
           <div>
@@ -627,11 +626,11 @@ export default function Step4AnalyticalReport() {
             <span className="text-navy-deep">{content.meta.filename}</span>
           </div>
           <div>
-            <span className="font-bold text-navy">Nombre de repondants : </span>
+            <span className="font-bold text-navy">Nombre de répondants : </span>
             <span className="text-navy-deep">{content.meta.n_rows}</span>
           </div>
           <div>
-            <span className="font-bold text-navy">Date de generation : </span>
+            <span className="font-bold text-navy">Date de génération : </span>
             <span className="text-navy-deep">
               {new Date(content.meta.generated_at).toLocaleDateString("fr-FR")}
             </span>
@@ -646,7 +645,7 @@ export default function Step4AnalyticalReport() {
       {/* SYNTHESE EXECUTIVE */}
       <div className="bg-white rounded-2xl p-6 mb-4 shadow-card border border-gray-200">
         <h2 className="font-sora font-bold text-navy text-2xl m-0 mb-3 border-b-2 border-gold pb-2">
-          Synthese executive
+          Synthèse exécutive
         </h2>
         <EditableInterpretation
           value={content.executive_summary}
@@ -657,7 +656,7 @@ export default function Step4AnalyticalReport() {
       {/* METHODOLOGIE */}
       <div className="bg-white rounded-2xl p-6 mb-4 shadow-card border border-gray-200">
         <h2 className="font-sora font-bold text-navy text-2xl m-0 mb-3 border-b-2 border-gold pb-2">
-          Methodologie
+          Méthodologie
         </h2>
         <p className="text-sm text-navy-deep leading-relaxed">{content.methodology}</p>
         {content.meta.survey_context?.description && (
@@ -678,7 +677,7 @@ export default function Step4AnalyticalReport() {
       {socio.length > 0 && (
         <div className="mb-4">
           <h2 className="font-sora font-bold text-navy text-2xl mb-3 px-1">
-            Profil des repondants
+            Profil des répondants
           </h2>
           {socio.map((u) => {
             const realIdx = content.univariate.indexOf(u)
@@ -716,7 +715,7 @@ export default function Step4AnalyticalReport() {
       {content.bivariate.length > 0 && (
         <div className="mb-4">
           <h2 className="font-sora font-bold text-navy text-2xl mb-3 px-1">
-            Analyses croisees
+            Analyses croisées
           </h2>
           {content.bivariate.map((b, i) => (
             <BivariateSection
@@ -732,7 +731,7 @@ export default function Step4AnalyticalReport() {
       {content.qc_summary && content.qc_summary.length > 0 && (
         <div className="bg-white rounded-2xl p-6 mb-4 shadow-card border border-gray-200">
           <h2 className="font-sora font-bold text-navy text-2xl m-0 mb-3 border-b-2 border-gold pb-2">
-            Qualite des donnees
+            Qualité des données
           </h2>
           <table className="w-full text-sm border-collapse">
             <thead>
@@ -780,12 +779,12 @@ export default function Step4AnalyticalReport() {
           {isDownloading ? (
             <>
               <Loader2 className="w-5 h-5 animate-spin" />
-              Telechargement...
+              Téléchargement...
             </>
           ) : (
             <>
               <Download className="w-5 h-5" />
-              Telecharger le rapport Word
+              Télécharger le rapport Word
             </>
           )}
         </button>

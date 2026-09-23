@@ -1,25 +1,40 @@
 import { useState } from "react"
 import { useStore } from "../store/useStore"
 import { Lock, User, AlertCircle, LogIn } from "lucide-react"
+import { api, setToken } from "../api/client"
 
-// Credentials (a deplacer dans .env pour la prod)
-const VALID_USERNAME = "sista26"
-const VALID_PASSWORD = "1234"
+// Les identifiants ne sont plus dans le code : ils sont verifies par le serveur
+// (variables APP_USERNAME / APP_PASSWORD sur Render).
 
 export default function Login() {
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
+  const [loading, setLoading] = useState(false)
   const setAuthenticated = useStore((s) => s.setAuthenticated)
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     setError("")
-    if (username.trim() === VALID_USERNAME && password === VALID_PASSWORD) {
+    if (!username.trim() || !password) {
+      setError("Veuillez saisir votre identifiant et votre mot de passe")
+      return
+    }
+    setLoading(true)
+    try {
+      const data = await api.login(username.trim(), password)
+      setToken(data.token)
+      try { localStorage.setItem("sista_auth", "1") } catch {}
       setAuthenticated(true)
-      localStorage.setItem("sista_auth", "1")
-    } else {
-      setError("Nom d'utilisateur ou mot de passe incorrect")
+    } catch (err) {
+      const msg = String(err.message || "")
+      setError(
+        msg.includes("Failed to fetch") || msg.includes("NetworkError")
+          ? "Serveur injoignable. Réessayez dans quelques secondes (il peut être en cours de démarrage)."
+          : msg || "Nom d'utilisateur ou mot de passe incorrect"
+      )
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -101,10 +116,11 @@ export default function Login() {
 
             <button
               type="submit"
-              className="btn-primary w-full justify-center flex items-center gap-2 mt-2"
+              disabled={loading}
+              className="btn-primary w-full justify-center flex items-center gap-2 mt-2 disabled:opacity-60"
             >
               <LogIn className="w-4 h-4" />
-              Se connecter
+              {loading ? "Connexion..." : "Se connecter"}
             </button>
           </form>
         </div>

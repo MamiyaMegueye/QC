@@ -1,4 +1,4 @@
-import { Folder, Search, BarChart3 } from "lucide-react"
+import { Folder, Search, BarChart3, FileText } from "lucide-react"
 import { useStore } from "../store/useStore"
 
 const INFO = {
@@ -23,6 +23,13 @@ const INFO = {
     msg: "Classement des enquêteurs selon les anomalies, validation formelle des cas, et génération du rapport de contrôle qualité pour audit.",
     grad: "linear-gradient(135deg, #FAEEDA 0%, #FCEBEB 50%, #EEEDFE 100%)",
     iconBg: "#A32D2D",
+  },
+  4: {
+    icon: FileText,
+    title: "Étape 4 — Rapport analytique",
+    msg: "Générez le rapport Word destiné au commanditaire : tableaux, graphiques et interprétations rédigées par l'IA, modifiables avant le téléchargement.",
+    grad: "linear-gradient(135deg, #E1F5EE 0%, #E6F1FB 50%, #EEEDFE 100%)",
+    iconBg: "#0F6E56",
   },
 }
 

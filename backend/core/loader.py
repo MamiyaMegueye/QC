@@ -20,6 +20,15 @@ import os
 import pandas as pd
 
 
+def _looks_binary(path, n=4096):
+    """True si le debut du fichier contient des octets nuls (fichier non textuel)."""
+    try:
+        with open(path, "rb") as f:
+            return b"\x00" in f.read(n)
+    except OSError:
+        return False
+
+
 class LoadedData:
     def __init__(self, df, var_labels=None, value_labels=None, meta=None):
         self.df = df
@@ -61,6 +70,12 @@ def load_file(path, dict_path=None):
 
     var_labels, value_labels = {}, {}
 
+    if ext in (".csv", ".tsv", ".txt") and _looks_binary(path):
+        raise ValueError(
+            "Le fichier n'est pas un fichier texte valide (contenu binaire). "
+            "Verifiez qu'il s'agit bien d'un CSV."
+        )
+
     if ext in (".csv", ".tsv", ".txt"):
         df = _read_csv_smart(path)
 
@@ -88,6 +103,12 @@ def load_file(path, dict_path=None):
     else:
         # tentative en CSV par défaut
         df = _read_csv_smart(path)
+
+    if df.shape[0] == 0 or df.shape[1] == 0:
+        raise ValueError(
+            "Le fichier ne contient aucune ligne de donnees (fichier vide, "
+            "en-tete seul ou format illisible)."
+        )
 
     # nettoyage des libellés vides
     var_labels = {k: v for k, v in var_labels.items() if v and str(v).strip()}

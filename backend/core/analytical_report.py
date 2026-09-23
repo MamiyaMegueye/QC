@@ -97,6 +97,17 @@ SISTA_CMAP = LinearSegmentedColormap.from_list(
 )
 
 
+
+def _is_num(t) -> bool:
+    """True pour le type numerique, avec ou sans accent.
+
+    Le profiler produit "numérique" (avec accent) : comparer a "numerique"
+    faisait traiter TOUTES les variables numeriques comme categorielles
+    dans le rapport (tableaux de modalites au lieu de statistiques/histogrammes).
+    """
+    return str(t).replace("é", "e").strip().lower() == "numerique"
+
+
 def _rgb(hex_color: str) -> RGBColor:
     h = hex_color.lstrip("#")
     return RGBColor(int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
@@ -366,7 +377,7 @@ def _build_planner_input(variables: list) -> list:
             "fill_rate": v["fill_rate"],
             "examples": v.get("examples", [])[:3],
         }
-        if v["type"] == "numerique" and v.get("stats"):
+        if _is_num(v["type"]) and v.get("stats"):
             item["stats"] = {
                 "min": v["stats"].get("min"),
                 "max": v["stats"].get("max"),
@@ -446,7 +457,7 @@ def compute_univariate(df: pd.DataFrame, var_info: dict) -> dict:
         "fill_rate": var_info["fill_rate"],
     }
 
-    if vtype == "numerique":
+    if _is_num(vtype):
         num = pd.to_numeric(
             series.astype(str).str.replace(",", ".", regex=False),
             errors="coerce"
@@ -541,7 +552,7 @@ def compute_bivariate(df: pd.DataFrame, var1_info: dict, var2_info: dict) -> dic
         return result
 
     # ---- CAT x CAT : heatmap OU stacked_100 selon la taille
-    if t1 != "numerique" and t2 != "numerique":
+    if not _is_num(t1) and not _is_num(t2):
         top1 = sub[col1].astype(str).value_counts().head(8).index
         top2 = sub[col2].astype(str).value_counts().head(8).index
         sub_f = sub[sub[col1].astype(str).isin(top1) & sub[col2].astype(str).isin(top2)]
@@ -566,9 +577,9 @@ def compute_bivariate(df: pd.DataFrame, var1_info: dict, var2_info: dict) -> dic
             result["chart"] = "heatmap"
 
     # ---- CAT x NUM : boxplot
-    elif (t1 == "numerique") != (t2 == "numerique"):
-        num_col = col1 if t1 == "numerique" else col2
-        cat_col = col2 if t1 == "numerique" else col1
+    elif _is_num(t1) != _is_num(t2):
+        num_col = col1 if _is_num(t1) else col2
+        cat_col = col2 if _is_num(t1) else col1
         sub_calc = sub.copy()
         sub_calc[num_col] = pd.to_numeric(
             sub_calc[num_col].astype(str).str.replace(",", ".", regex=False),
@@ -984,8 +995,8 @@ def chart_boxplot(biv: dict) -> bytes:
                edgecolor=SISTA["navy"], linewidth=1.2, zorder=5,
                label="Moyenne")
 
-    num_label = biv['label1'] if biv['type1'] == 'numerique' else biv['label2']
-    cat_label = biv['label2'] if biv['type1'] == 'numerique' else biv['label1']
+    num_label = biv['label1'] if _is_num(biv['type1']) else biv['label2']
+    cat_label = biv['label2'] if _is_num(biv['type1']) else biv['label1']
     ax.set_xlabel(num_label)
     ax.set_title(f"Distribution de {num_label} selon {cat_label}"[:80], pad=14)
     ax.legend(loc="best")
@@ -1019,8 +1030,8 @@ def _chart_grouped_lollipop_fallback(biv: dict) -> bytes:
     ax.set_yticks(y_pos)
     ax.set_yticklabels(labels)
     ax.invert_yaxis()
-    num_label = biv['label1'] if biv['type1'] == 'numerique' else biv['label2']
-    cat_label = biv['label2'] if biv['type1'] == 'numerique' else biv['label1']
+    num_label = biv['label1'] if _is_num(biv['type1']) else biv['label2']
+    cat_label = biv['label2'] if _is_num(biv['type1']) else biv['label1']
     ax.set_xlabel(f"Moyenne de {num_label}")
     ax.set_title(f"{num_label} par {cat_label}"[:80], pad=14)
     ax.grid(True, axis="x", alpha=0.3)
@@ -1509,7 +1520,7 @@ def write_interpretations(api: str, api_key: str,
             "type": u["type"],
             "n": u["n"],
         }
-        if u["type"] == "numerique" and "stats" in u:
+        if _is_num(u["type"]) and "stats" in u:
             item["stats"] = u["stats"]
         elif "distribution" in u:
             item["distribution"] = u["distribution"][:10]
@@ -1647,10 +1658,10 @@ def build_report_content(
     # Methodologie auto
     summary = profile["summary"]
     methodology = (
-        f"Le present rapport est base sur l'analyse de {summary['n_rows']} "
-        f"observations collectees, mesurees sur {summary['n_vars']} variables. "
-        f"Le jeu de donnees comprend {summary['n_numeric']} variables numeriques, "
-        f"{summary['n_categorical']} variables categorielles, "
+        f"Le présent rapport est basé sur l'analyse de {summary['n_rows']} "
+        f"observations collectées, mesurées sur {summary['n_vars']} variables. "
+        f"Le jeu de données comprend {summary['n_numeric']} variables numériques, "
+        f"{summary['n_categorical']} variables catégorielles, "
         f"{summary['n_date']} variables temporelles et "
         f"{summary['n_text']} variables textuelles. "
         f"Le taux global de remplissage est de {summary['global_fill_rate']}%."
@@ -1764,7 +1775,7 @@ def _add_distribution_table(doc: Document, distribution: list):
     table.style = "Light Grid Accent 1"
 
     hdr = table.rows[0].cells
-    for i, h in enumerate(["Modalite", "Effectif", "Pourcentage"]):
+    for i, h in enumerate(["Modalité", "Effectif", "Pourcentage"]):
         hdr[i].text = ""
         p = hdr[i].paragraphs[0]
         run = p.add_run(h)
@@ -1827,7 +1838,7 @@ def _add_cover_page(doc: Document, survey_context: dict, filename: str, n_rows: 
     run_t.font.bold = True
     run_t.font.color.rgb = _rgb(SISTA["navy"])
 
-    survey_type = survey_context.get("type") or "Enquete"
+    survey_type = survey_context.get("type") or "Enquête"
     p_sub = doc.add_paragraph()
     p_sub.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run_s = p_sub.add_run(survey_type)
@@ -1842,8 +1853,8 @@ def _add_cover_page(doc: Document, survey_context: dict, filename: str, n_rows: 
     info_table.alignment = WD_TABLE_ALIGNMENT.CENTER
     info_rows = [
         ("Fichier source", filename),
-        ("Nombre de repondants", f"{n_rows}"),
-        ("Date de generation", datetime.now().strftime("%d/%m/%Y")),
+        ("Nombre de répondants", f"{n_rows}"),
+        ("Date de génération", datetime.now().strftime("%d/%m/%Y")),
     ]
     for i, (k, v) in enumerate(info_rows):
         c0, c1 = info_table.rows[i].cells
@@ -1875,7 +1886,7 @@ def _render_uni_section(doc, uni):
     _add_paragraph(
         doc,
         f"Variable : {uni['name']} | Type : {uni['type']} | "
-        f"Reponses : {uni['n']} ({uni['fill_rate']}% de remplissage)",
+        f"Réponses : {uni['n']} ({uni['fill_rate']}% de remplissage)",
         italic=True, color=SISTA["gray"], size=9
     )
 
@@ -1890,7 +1901,7 @@ def _render_uni_section(doc, uni):
             _add_paragraph(doc, f"(Graphe non disponible : {e})",
                            italic=True, color=SISTA["gray"])
 
-    if uni["type"] == "numerique" and "stats" in uni:
+    if _is_num(uni["type"]) and "stats" in uni:
         _add_stats_table(doc, uni["stats"])
     elif "distribution" in uni:
         _add_distribution_table(doc, uni["distribution"][:15])
@@ -1940,7 +1951,7 @@ def _render_biv_section(doc, biv):
 
 
 def _add_qc_section_from_content(doc, qc_summary):
-    _add_heading(doc, "Qualite des donnees", level=1)
+    _add_heading(doc, "Qualité des données", level=1)
     _add_paragraph(
         doc,
         "Cette section presente le bilan du controle qualite automatise. "
@@ -1999,18 +2010,18 @@ def compose_word_from_content(content: dict) -> bytes:
     _add_cover_page(doc, meta["survey_context"], meta["filename"], meta["n_rows"])
 
     # Synthese executive
-    _add_heading(doc, "Synthese executive", level=1)
+    _add_heading(doc, "Synthèse exécutive", level=1)
     _add_paragraph(doc, content.get("executive_summary") or
                    "Ce rapport presente l'analyse descriptive de l'enquete.", size=11)
     doc.add_paragraph()
 
     # Methodologie
-    _add_heading(doc, "Methodologie", level=1)
+    _add_heading(doc, "Méthodologie", level=1)
     _add_paragraph(doc, content.get("methodology", ""))
     survey_ctx = meta.get("survey_context", {})
     if survey_ctx.get("description"):
         doc.add_paragraph()
-        _add_paragraph(doc, "Contexte de l'enquete :", bold=True)
+        _add_paragraph(doc, "Contexte de l'enquête :", bold=True)
         _add_paragraph(doc, survey_ctx["description"])
     if survey_ctx.get("population"):
         _add_paragraph(doc, "Population cible : " + survey_ctx["population"])
@@ -2019,22 +2030,22 @@ def compose_word_from_content(content: dict) -> bytes:
     # Perimetre d'analyse : transparence sur les variables retenues vs exclues
     scope = content.get("analysis_scope")
     if scope and scope.get("n_total"):
-        _add_heading(doc, "Perimetre d'analyse", level=1)
+        _add_heading(doc, "Périmètre d'analyse", level=1)
         _add_paragraph(
             doc,
             f"Le fichier source contient {scope['n_total']} variables. "
-            f"Pour ce rapport destine au commanditaire, {scope['n_retained']} variables "
-            f"ont ete retenues pour l'analyse statistique. Les {scope['n_excluded']} variables "
-            f"restantes ont ete ecartees car elles correspondent a des metadonnees techniques "
-            f"de collecte (identifiants, horodatages, GPS, enqueteur, commentaires libres, "
-            f"contacts personnels) sans valeur pour l'interpretation metier.",
+            f"Pour ce rapport destiné au commanditaire, {scope['n_retained']} variables "
+            f"ont été retenues pour l'analyse statistique. Les {scope['n_excluded']} variables "
+            f"restantes ont été écartées car elles correspondent à des métadonnées techniques "
+            f"de collecte (identifiants, horodatages, GPS, enquêteur, commentaires libres, "
+            f"contacts personnels) sans valeur pour l'interprétation métier.",
             size=10,
         )
 
         # Resume par categorie d'exclusion
         if scope.get("exclusion_summary"):
             doc.add_paragraph()
-            _add_paragraph(doc, "Resume des exclusions :", bold=True, size=10)
+            _add_paragraph(doc, "Résumé des exclusions :", bold=True, size=10)
             sum_table = doc.add_table(rows=1, cols=2)
             sum_table.style = "Light Grid Accent 1"
             hdr = sum_table.rows[0].cells
@@ -2066,7 +2077,7 @@ def compose_word_from_content(content: dict) -> bytes:
     principale = [u for u in content["univariate"] if u.get("category") != "sociodemo"]
 
     if socio:
-        _add_heading(doc, "Profil des repondants", level=1)
+        _add_heading(doc, "Profil des répondants", level=1)
         for u in socio:
             _render_uni_section(doc, u)
 
@@ -2077,7 +2088,7 @@ def compose_word_from_content(content: dict) -> bytes:
 
     # Croisements
     if content["bivariate"]:
-        _add_heading(doc, "Analyses croisees", level=1)
+        _add_heading(doc, "Analyses croisées", level=1)
         for b in content["bivariate"]:
             _render_biv_section(doc, b)
 
@@ -2092,7 +2103,7 @@ def compose_word_from_content(content: dict) -> bytes:
     annex_table = doc.add_table(rows=1, cols=4)
     annex_table.style = "Light Grid Accent 1"
     hdr = annex_table.rows[0].cells
-    for i, h in enumerate(["Variable", "Type", "Remplissage", "Modalites"]):
+    for i, h in enumerate(["Variable", "Type", "Remplissage", "Modalités"]):
         hdr[i].text = ""
         p = hdr[i].paragraphs[0]
         run = p.add_run(h)

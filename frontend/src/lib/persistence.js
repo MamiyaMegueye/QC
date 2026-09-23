@@ -111,6 +111,13 @@ export function addHistoryEntry(entry) {
       saved_at: new Date().toISOString(),
       ...entry,
     }
+    // Une seule entree par session d'analyse : on la met a jour (au lieu de la
+    // laisser figee a l'etat du QC basique)
+    if (entry && entry.session_id) {
+      const existing = list.find((h) => h.session_id === entry.session_id)
+      if (existing) enriched.id = existing.id
+      list = list.filter((h) => h.session_id !== entry.session_id)
+    }
     list.unshift(enriched)
     if (list.length > MAX_HISTORY_ENTRIES) list = list.slice(0, MAX_HISTORY_ENTRIES)
     ls.setItem(HISTORY_KEY, JSON.stringify(list))

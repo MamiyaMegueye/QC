@@ -4,6 +4,7 @@ import ApercuTab from "../tabs/ApercuTab"
 import QcBasicTab from "../tabs/QcBasicTab"
 import QcAITab from "../tabs/QcAITab"
 import { ArrowLeft } from "lucide-react"
+import { api } from "../../api/client"
 
 export default function Step2Detect() {
   const [activeTab, setActiveTab] = useState("apercu")
@@ -41,8 +42,7 @@ export default function Step2Detect() {
           </span>
           <button
             onClick={async () => {
-              const url = `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/session/${sessionId}/spotcheck-report`
-              window.open(url, '_blank')
+              window.open(api.getSpotcheckReportUrl(sessionId), '_blank')
             }}
             className="ml-2 text-xs px-3 py-1 rounded bg-purple-600 text-white hover:bg-purple-700 font-bold"
           >

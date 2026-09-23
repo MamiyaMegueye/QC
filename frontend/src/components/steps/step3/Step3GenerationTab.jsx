@@ -124,6 +124,7 @@ export default function Step3GenerationTab({ onGoToValidation }) {
       window.URL.revokeObjectURL(url)
 
       setDownloadSuccess(true)
+      store.saveToHistory()
       setTimeout(() => setDownloadSuccess(false), 5000)
     } catch (e) {
       store.setApiError(e.message)
@@ -203,7 +204,7 @@ export default function Step3GenerationTab({ onGoToValidation }) {
                 {summary.counts.pending} cas encore en attente de décision
               </p>
               <p className="text-amber-800 text-xs mt-1 m-0">
-                Tu peux quand même générer le rapport, mais il indiquera ces cas
+                Vous pouvez quand même générer le rapport, mais il indiquera ces cas
                 comme "en attente" et ne sera pas une trace définitive.
               </p>
             </div>

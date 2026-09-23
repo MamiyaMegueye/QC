@@ -27,7 +27,8 @@ export function DraftBanner() {
   const store = useStore()
   const draft = store.draftAvailable
 
-  if (!draft) return null
+  // Pas de banniere si une analyse est deja en cours ou si le brouillon a ete restaure
+  if (!draft || store.sessionId || store.draftRestored) return null
 
   return (
     <div className="bg-gradient-to-r from-gold/20 to-gold/5 border-l-4 border-gold rounded-2xl p-4 mb-5 flex items-start gap-3 shadow-sm slide-up">

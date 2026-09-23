@@ -749,10 +749,17 @@ export default function Step1Import() {
   const currentConfigured = store.selectedApi === "api1" ? store.api1Configured : store.api2Configured
   const canTest = (currentKey && currentKey.length > 0) || currentConfigured
 
+  // Back check : le panneau remplace la page d'import (au lieu de s'empiler dessus)
+  if (showBackCheck) {
+    return (
+      <div className="space-y-5 slide-up">
+        <BackCheckPanel onClose={() => setShowBackCheck(false)} />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-5 slide-up">
-      {/* Panel appariement pre/post (modal) */}
-      {showBackCheck && <BackCheckPanel onClose={() => setShowBackCheck(false)} />}
 
       {/* Persistance : bannieres brouillon */}
       <DraftBanner />

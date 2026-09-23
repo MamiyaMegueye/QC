@@ -26,13 +26,18 @@ import io
 import os
 import json
 import uuid
+import time
+import hmac
+import base64
+import hashlib
 import tempfile
 from typing import Optional
 
 import pandas as pd
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
+from starlette.background import BackgroundTask
 from pydantic import BaseModel
 
 try:
@@ -56,11 +61,76 @@ from core import qc_report
 from core import backcheck
 from core import spotcheck, spotcheck_report
 
+APP_VERSION = "1.9.0"
+
+# La documentation interactive (/docs, /openapi.json) n'est plus publique
 app = FastAPI(
     title="SISTA QC API",
     description="API REST pour le moteur de Controle Qualite SISTA",
-    version="1.8.0",
+    version=APP_VERSION,
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
 )
+
+# ----------------------------------------------------------------------
+#  Authentification (jeton signe HMAC)
+#  A definir dans les variables d'environnement Render :
+#     APP_USERNAME, APP_PASSWORD  (et idealement APP_SECRET)
+#  Si elles ne sont pas definies, les anciens identifiants par defaut
+#  restent valables (a changer impérativement en production).
+# ----------------------------------------------------------------------
+APP_USERNAME = os.environ.get("APP_USERNAME", "sista26")
+APP_PASSWORD = os.environ.get("APP_PASSWORD", "1234")
+TOKEN_TTL_SECONDS = 12 * 3600
+PUBLIC_PATHS = {"/", "/api/login"}
+_LOGIN_FAILURES: dict = {}   # ip -> [timestamps]
+
+if "APP_PASSWORD" not in os.environ:
+    print("[SECURITE] APP_PASSWORD non defini : identifiants par defaut actifs. "
+          "Definissez APP_USERNAME / APP_PASSWORD (et APP_SECRET) sur Render.")
+
+
+def _auth_secret() -> bytes:
+    explicit = os.environ.get("APP_SECRET", "")
+    if explicit:
+        return explicit.encode()
+    return hashlib.sha256(
+        f"{APP_USERNAME}:{APP_PASSWORD}:sista-qc".encode()
+    ).hexdigest().encode()
+
+
+def _make_token(username: str) -> str:
+    exp = int(time.time()) + TOKEN_TTL_SECONDS
+    payload = f"{username}|{exp}"
+    sig = hmac.new(_auth_secret(), payload.encode(), hashlib.sha256).hexdigest()
+    return base64.urlsafe_b64encode(f"{payload}|{sig}".encode()).decode()
+
+
+def _check_token(token: str) -> bool:
+    try:
+        raw = base64.urlsafe_b64decode(token.encode()).decode()
+        username, exp, sig = raw.rsplit("|", 2)
+        expected = hmac.new(_auth_secret(), f"{username}|{exp}".encode(),
+                            hashlib.sha256).hexdigest()
+        return hmac.compare_digest(sig, expected) and int(exp) > time.time()
+    except Exception:
+        return False
+
+
+@app.middleware("http")
+async def require_auth(request: Request, call_next):
+    # Doit etre declare AVANT le middleware CORS pour que les reponses 401
+    # portent aussi les en-tetes CORS (le navigateur affiche alors le vrai statut).
+    if request.method == "OPTIONS" or request.url.path in PUBLIC_PATHS:
+        return await call_next(request)
+    auth = request.headers.get("authorization", "")
+    token = auth[7:].strip() if auth.lower().startswith("bearer ") else ""
+    if not token:
+        token = request.query_params.get("token", "")   # liens de telechargement
+    if not token or not _check_token(token):
+        return JSONResponse({"detail": "Non authentifie"}, status_code=401)
+    return await call_next(request)
 
 ALLOWED_ORIGINS = [
     "http://localhost:5173",
@@ -78,6 +148,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Content-Disposition"],
 )
 
 SESSIONS: dict = {}
@@ -92,6 +163,11 @@ def _get_session(session_id: str) -> dict:
     if not s:
         raise HTTPException(404, "Session introuvable ou expiree")
     return s
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
 
 
 class TestKeyRequest(BaseModel):
@@ -141,13 +217,33 @@ class GenerateQcReportRequest(BaseModel):
                           #   observations_generales }
 
 
+_TEMP_FILES: list = []   # [(chemin, horodatage)]
+
+
+def _purge_old_temp_files(max_age_seconds: int = 900):
+    """Supprime les fichiers temporaires d'upload de plus de 15 minutes."""
+    now = time.time()
+    keep = []
+    for path, ts in _TEMP_FILES:
+        if now - ts > max_age_seconds:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+        else:
+            keep.append((path, ts))
+    _TEMP_FILES[:] = keep
+
+
 def _save_upload(file: UploadFile) -> str:
-    suffix = os.path.splitext(file.filename)[1]
+    _purge_old_temp_files()
+    suffix = os.path.splitext(file.filename or "")[1]
     tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
     content = file.file.read()
     tmp.write(content)
     tmp.close()
     file.file.seek(0)
+    _TEMP_FILES.append((tmp.name, time.time()))
     return tmp.name
 
 
@@ -171,7 +267,28 @@ def _resolve_api_key(api: str, key_from_request: str) -> str:
 
 @app.get("/")
 def root():
-    return {"name": "SISTA QC API", "status": "online", "version": "1.4.0"}
+    return {"name": "SISTA QC API", "status": "online", "version": APP_VERSION}
+
+
+@app.post("/api/login")
+def login(req: LoginRequest, request: Request):
+    ip = request.client.host if request.client else "?"
+    now = time.time()
+    recent = [t for t in _LOGIN_FAILURES.get(ip, []) if now - t < 300]
+    if len(recent) >= 10:
+        raise HTTPException(429, "Trop de tentatives. Reessayez dans quelques minutes.")
+    # L'identifiant est insensible a la casse (sista26 == Sista26) ;
+    # le mot de passe reste, lui, sensible a la casse.
+    ok_user = hmac.compare_digest(req.username.strip().lower().encode(),
+                                  APP_USERNAME.strip().lower().encode())
+    ok_pwd = hmac.compare_digest(req.password.encode(), APP_PASSWORD.encode())
+    if not (ok_user and ok_pwd):
+        recent.append(now)
+        _LOGIN_FAILURES[ip] = recent
+        raise HTTPException(401, "Nom d'utilisateur ou mot de passe incorrect")
+    _LOGIN_FAILURES.pop(ip, None)
+    return {"ok": True, "token": _make_token(APP_USERNAME),
+            "expires_in": TOKEN_TTL_SECONDS}
 
 
 @app.get("/api/health")
@@ -192,6 +309,8 @@ def test_key(req: TestKeyRequest):
             return {"ok": False,
                     "message": "Aucune cle disponible (ni dans le champ ni dans .env)"}
         ok, msg = ai_agent.test_api_key(req.api, key_to_test)
+        if not req.api_key:
+            msg += " — cle du serveur utilisee (aucune cle saisie)"
         return {"ok": ok, "message": msg}
     except Exception as e:
         return {"ok": False, "message": _clean_error_msg(e)}
@@ -391,6 +510,14 @@ def generate_rules(req: GenerateRulesRequest):
     key_to_use = _resolve_api_key(req.api, req.api_key)
     if not key_to_use:
         raise HTTPException(400, "Aucune cle API disponible (ni dans l'interface ni dans .env)")
+
+    # Memorise le contexte d'enquete pour le rapport QC (type d'enquete)
+    sess["survey_context"] = {
+        "type": req.survey_type,
+        "description": req.survey_description,
+        "population": req.survey_population,
+        "eligibility": req.survey_eligibility,
+    }
 
     try:
         rules, comment, metrics = ai_agent.generate_rules(
@@ -691,6 +818,7 @@ def generate_report_preview(session_id: str, req: GenerateReportPreviewRequest):
             "population": req.survey_population,
             "eligibility": req.survey_eligibility,
         }
+        sess["survey_context"] = survey_context
 
         qc_stats = None
         try:
@@ -888,6 +1016,7 @@ async def get_spotcheck_report(session_id: str):
             tmp.name,
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             filename="Rapport_Spotcheck.docx",
+            background=BackgroundTask(os.remove, tmp.name),
         )
     except ValueError as ve:
         raise HTTPException(400, str(ve))

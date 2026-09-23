@@ -26,7 +26,7 @@ export default function Stepper() {
   }
 
   return (
-    <div className="bg-white rounded-2xl p-5 px-8 mb-5 shadow-card border border-gray-200 flex items-center justify-between">
+    <div className="bg-white rounded-2xl p-3 sm:p-5 md:px-8 mb-5 shadow-card border border-gray-200 flex items-center justify-between overflow-hidden">
       {STEPS.map((step, idx) => {
         const status = stepStatus(step.num)
         const clickable = canGoTo(step.num)
@@ -36,7 +36,7 @@ export default function Stepper() {
             <button
               onClick={() => clickable && setStep(step.num)}
               disabled={!clickable}
-              className={`flex items-center gap-3 group ${
+              className={`flex items-center gap-2 md:gap-3 group ${
                 clickable ? "cursor-pointer" : "cursor-not-allowed opacity-60"
               }`}
             >
@@ -52,7 +52,9 @@ export default function Stepper() {
                 {status === "done" ? <Check className="w-5 h-5" /> : step.num}
               </div>
               <span
-                className={`font-sora font-semibold text-base transition-colors ${
+                className={`font-sora font-semibold text-sm md:text-base transition-colors ${
+                  status === "active" ? "inline" : "hidden lg:inline"
+                } ${
                   status === "active"
                     ? "text-navy"
                     : status === "done"
@@ -66,7 +68,7 @@ export default function Stepper() {
 
             {idx < STEPS.length - 1 && (
               <div
-                className={`flex-1 h-0.5 mx-4 rounded-full transition-colors ${
+                className={`flex-1 h-0.5 mx-2 md:mx-4 min-w-[8px] rounded-full transition-colors ${
                   step.num < currentStep ? "bg-green-500" : "bg-gray-200"
                 }`}
               />

@@ -18,11 +18,13 @@ v2 : renforcement du prompt systeme (entites distinctes) + filtre
 
 from __future__ import annotations
 
+import ast
 import json
 import re
 import time
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 # ----------------------------------------------------------------------
@@ -702,11 +704,108 @@ def generate_rules(api: str,
 
 
 # ----------------------------------------------------------------------
+#  Execution SECURISEE des expressions generees par l'IA
+#
+#  Les expressions viennent d'un LLM : on ne les passe JAMAIS a eval() sans
+#  validation. On n'autorise que des expressions pandas "pures" (comparaisons,
+#  operateurs, appels de methodes de DataFrame/Series) et on interdit :
+#    - tout nom autre que df / pd / np / builtins inoffensifs / parametres lambda
+#    - tout attribut prive ou "dunder" (__class__, __globals__ ...)
+#    - les fonctions d'I/O pandas (read_*, to_*), eval, query, pipe, etc.
+# ----------------------------------------------------------------------
+
+_SAFE_BUILTINS = {
+    "len": len, "str": str, "int": int, "float": float, "abs": abs,
+    "min": min, "max": max, "round": round, "sum": sum, "bool": bool,
+    "list": list, "set": set, "tuple": tuple, "any": any, "all": all,
+}
+
+_ALLOWED_NODES = (
+    ast.Expression, ast.BoolOp, ast.BinOp, ast.UnaryOp, ast.Compare, ast.Call,
+    ast.Attribute, ast.Subscript, ast.Name, ast.Load, ast.Constant, ast.List,
+    ast.Tuple, ast.Set, ast.Dict, ast.Slice, ast.keyword, ast.IfExp,
+    ast.Lambda, ast.arguments, ast.arg,
+    ast.And, ast.Or, ast.Not, ast.Invert, ast.USub, ast.UAdd,
+    ast.Add, ast.Sub, ast.Mult, ast.Div, ast.FloorDiv, ast.Mod, ast.Pow,
+    ast.BitAnd, ast.BitOr, ast.BitXor,
+    ast.Eq, ast.NotEq, ast.Lt, ast.LtE, ast.Gt, ast.GtE,
+    ast.In, ast.NotIn, ast.Is, ast.IsNot,
+)
+if hasattr(ast, "Index"):          # Python < 3.9
+    _ALLOWED_NODES = _ALLOWED_NODES + (ast.Index,)
+
+_FORBIDDEN_ATTRS = {
+    "eval", "exec", "query", "pipe", "system", "popen", "open", "compile",
+    "style", "read_csv", "to_csv", "values_ptr",
+}
+_MAX_EXPR_LEN = 1500
+
+# Seuls ces membres de `pd` / `np` sont accessibles (pas d'acces aux modules
+# internes du type pd.io.common.os)
+_ALLOWED_PD_ATTRS = {
+    "to_numeric", "to_datetime", "to_timedelta", "isna", "isnull", "notna",
+    "notnull", "Timestamp", "Timedelta", "NaT", "DateOffset", "Series",
+    "DataFrame", "NA",
+}
+_ALLOWED_NP_ATTRS = {
+    "nan", "inf", "isnan", "isfinite", "abs", "where", "floor", "ceil",
+    "round", "sqrt", "log", "log10", "mean", "median", "sum", "minimum",
+    "maximum", "select",
+}
+# Methodes to_* explicitement autorisees sur les Series/DataFrames
+_ALLOWED_TO_METHODS = {
+    "to_numeric", "to_datetime", "to_timedelta", "to_list", "to_dict",
+    "to_period", "to_pydatetime", "to_frame", "to_numpy",
+}
+
+
+def _validate_expression(expr: str):
+    """Leve ValueError si l'expression n'est pas une expression pandas sure."""
+    if not isinstance(expr, str) or not expr.strip():
+        raise ValueError("Expression vide")
+    if len(expr) > _MAX_EXPR_LEN:
+        raise ValueError("Expression trop longue")
+    tree = ast.parse(expr.strip(), mode="eval")
+
+    lambda_args = {a.arg for n in ast.walk(tree) if isinstance(n, ast.Lambda)
+                   for a in n.args.args}
+    allowed_names = {"df", "pd", "np", "True", "False", "None"} \
+        | set(_SAFE_BUILTINS) | lambda_args
+
+    for node in ast.walk(tree):
+        if not isinstance(node, _ALLOWED_NODES):
+            raise ValueError(f"Element interdit : {type(node).__name__}")
+        if isinstance(node, ast.Name) and node.id not in allowed_names:
+            raise ValueError(f"Nom interdit : {node.id}")
+        if isinstance(node, ast.Attribute):
+            attr = node.attr
+            if isinstance(node.value, ast.Name) and node.value.id == "pd":
+                if attr not in _ALLOWED_PD_ATTRS:
+                    raise ValueError(f"pd.{attr} interdit")
+            elif isinstance(node.value, ast.Name) and node.value.id == "np":
+                if attr not in _ALLOWED_NP_ATTRS:
+                    raise ValueError(f"np.{attr} interdit")
+            if (attr.startswith("_") or attr in _FORBIDDEN_ATTRS
+                    or attr.startswith("read_")
+                    or (attr.startswith("to_") and attr not in _ALLOWED_TO_METHODS)):
+                raise ValueError(f"Attribut interdit : {attr}")
+    return compile(tree, "<regle_ia>", "eval")
+
+
+def _safe_eval_rule(expr: str, df: pd.DataFrame):
+    code = _validate_expression(expr)
+    return eval(code, {"__builtins__": _SAFE_BUILTINS,
+                       "df": df, "pd": pd, "np": np}, {})
+
+
+# ----------------------------------------------------------------------
 #  Execution des regles (Pandas pur, sur 100% du fichier)
 # ----------------------------------------------------------------------
 
 def run_rules(df: pd.DataFrame, rules: list, mp: dict) -> dict:
     """Execute les regles sur le DataFrame complet."""
+    # Meme base de lignes que le QC basique (index 0..n-1, affichage +1)
+    df = df.reset_index(drop=True)
     rows_out = []
     enqueteur_col = mp.get("enqueteur")
     superviseur_col = mp.get("superviseur")
@@ -714,7 +813,7 @@ def run_rules(df: pd.DataFrame, rules: list, mp: dict) -> dict:
 
     for rule_idx, rule in enumerate(rules):
         try:
-            mask = eval(rule["expression"], {"df": df, "pd": pd}, {})
+            mask = _safe_eval_rule(rule["expression"], df)
             if not isinstance(mask, pd.Series):
                 continue
 
@@ -737,17 +836,23 @@ def run_rules(df: pd.DataFrame, rules: list, mp: dict) -> dict:
                         val = df.loc[idx, col]
                         valeurs[col] = (str(val) if pd.notna(val) else "(vide)")
 
+                enq_val = (str(df.loc[idx, enqueteur_col])
+                           if enqueteur_col and enqueteur_col in df.columns
+                           and pd.notna(df.loc[idx, enqueteur_col])
+                           else "Inconnu")
+                sup_val = (str(df.loc[idx, superviseur_col])
+                           if superviseur_col and superviseur_col in df.columns
+                           and pd.notna(df.loc[idx, superviseur_col])
+                           else "—")
                 row = {
-                    "_index": int(idx),
+                    "_index": int(idx) + 1,
                     "_severite": severite,
                     "_rule_idx": rule_idx,
-                    "Enqueteur": (str(df.loc[idx, enqueteur_col])
-                                  if enqueteur_col and enqueteur_col in df.columns
-                                  else "Inconnu"),
-                    "Superviseur": (str(df.loc[idx, superviseur_col])
-                                    if superviseur_col and superviseur_col in df.columns
-                                    and pd.notna(df.loc[idx, superviseur_col])
-                                    else "—"),
+                    "Enqueteur": enq_val,
+                    "Superviseur": sup_val,
+                    # Cles lues par le bilan par enqueteur / filtres (comme le QC basique)
+                    "_enqueteur": enq_val if enq_val != "Inconnu" else "—",
+                    "_superviseur": sup_val,
                     "Regle": rule["description"],
                     "Colonnes_concernees": ", ".join(cols_in_rule),
                     "Valeurs": " | ".join(f"{k}={v}" for k, v in valeurs.items()),

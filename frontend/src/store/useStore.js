@@ -10,7 +10,8 @@ import {
 const isAuthFromStorage = () => {
   if (typeof window === "undefined") return false
   try {
-    return localStorage.getItem("sista_auth") === "1"
+    // Il faut a la fois le drapeau et un jeton serveur
+    return localStorage.getItem("sista_auth") === "1" && !!localStorage.getItem("sista_token")
   } catch {
     return false
   }
@@ -41,6 +42,7 @@ export const useStore = create((set, get) => ({
   logout: () => {
     try {
       localStorage.removeItem("sista_auth")
+      localStorage.removeItem("sista_token")
     } catch {}
     set({ isAuthenticated: false })
   },
@@ -182,8 +184,10 @@ export const useStore = create((set, get) => ({
   mp: null,
   stats: null,
   preview: [],
+  spotcheckInfo: null,
   setAnalysisData: (data) =>
     set({
+      spotcheckInfo: data.spotcheck_info || null,
       sessionId: data.session_id,
       filename: data.filename,
       profile: data.profile,
@@ -204,13 +208,16 @@ export const useStore = create((set, get) => ({
   aiResult: null,
   aiComment: "",
   aiMetrics: null,
-  setAiResults: (data) =>
+  setAiResults: (data) => {
     set({
       aiRules: data.rules,
       aiResult: data.result,
       aiComment: data.comment,
       aiMetrics: data.metrics,
-    }),
+    })
+    // Met a jour l'entree d'historique (nombre de regles IA, etc.)
+    setTimeout(() => get().saveToHistory(), 100)
+  },
 
   // Bilan enqueteurs
   enqueteurSummary: [],
@@ -308,6 +315,7 @@ export const useStore = create((set, get) => ({
       mp: null,
       stats: null,
       preview: [],
+      spotcheckInfo: null,
       aiRules: [],
       aiResult: null,
       aiComment: "",
@@ -397,6 +405,7 @@ export const useStore = create((set, get) => ({
       (v) => v.status && v.status !== "pending"
     ).length
     const entry = {
+      session_id:     s.sessionId,
       filename:       s.filename,
       surveyType:     s.surveyType,
       n_observations: s.stats?.observations ?? s.stats?.questionnaires ?? 0,

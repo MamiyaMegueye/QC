@@ -243,6 +243,7 @@ export default function Step3ValidationTab({ onGoToGeneration }) {
     try {
       await api.saveValidations(store.sessionId, store.validations, store.qcMetadata)
       setLastSaved(new Date())
+      store.saveToHistory()
     } catch (e) {
       store.setApiError(e.message)
     } finally {
@@ -269,7 +270,7 @@ export default function Step3ValidationTab({ onGoToGeneration }) {
           Aucune anomalie à valider
         </h3>
         <p className="text-gray-600 m-0">
-          Aucun test n'a détecté d'anomalie dans ce fichier. Tu peux générer
+          Aucun test n'a détecté d'anomalie dans ce fichier. Vous pouvez générer
           un rapport vierge directement.
         </p>
         <button onClick={onGoToGeneration} className="btn-primary mt-4">

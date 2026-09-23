@@ -395,12 +395,14 @@ def _get_enq_sup(row, mp):
 def _make_test_result(test_id, titre, severite, pourquoi, cause, action, lignes, cols):
     """Construit un dict au meme format que qc_basic."""
     return {
+        "id": test_id,          # meme cle que les tests de qc_basic
         "test_id": test_id,
         "titre": titre,
         "severite": severite,
         "n_cas": len(lignes),
         "explication": {"pourquoi": pourquoi, "cause": cause, "action": action},
         "lignes": lignes[:200],
+        "colonnes": cols,
         "colonnes_display": cols,
     }
 

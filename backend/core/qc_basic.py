@@ -86,6 +86,9 @@ def auto_map(columns):
         ]),
         "id": find([
             r"id.?progres", r"^id$", r"identifiant",
+            r"id[_-]?m[ée]nage", r"code[_-]?m[ée]nage",
+            r"id[_-]?(?:hh|household|obs|repondant|respondent|benef\w*|client|individu)",
+            r"code[_-]?(?:hh|repondant|respondent|benef\w*)",
             r"m[ée]nage.*id", r"hh.?id", r"uuid", r"num.*quest",
             r"household[_-]?id", r"observation[_-]?id", r"obs[_-]?id",
             # On garde "questionnaire_id" pour la retro-compatibilite avec
@@ -345,6 +348,10 @@ def test_outliers(df, mp, profile, params):
         if iqr == 0:
             continue
         low, high = q1 - k * iqr, q3 + k * iqr
+        # Une variable qui n'a jamais de valeur negative (age, nombre, montant)
+        # ne doit pas afficher une borne basse negative
+        if s.min() >= 0:
+            low = max(low, 0.0)
         for idx in df.index:
             val = _to_num(df.loc[idx, col])
             if val is None:
@@ -396,7 +403,9 @@ def test_intervalle_starts(df, mp, profile, params):
         return None
     seuil = params.get("duree_min", 18)
     lignes = []
-    tmp = df.copy()
+    # Les lignes strictement dupliquees sont deja signalees par un autre test :
+    # on ne les recompte pas comme "intervalle de 0 min"
+    tmp = df[~df.duplicated(keep="first")].copy()
     tmp["_dt"] = tmp[s_col].apply(_parse_dt)
     tmp = tmp.dropna(subset=["_dt"])
     for enq, grp in tmp.groupby(enq_col):

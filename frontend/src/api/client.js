@@ -2,8 +2,46 @@
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000"
 
+// ====================================================================
+//  Authentification : jeton signe delivre par /api/login
+// ====================================================================
+const TOKEN_KEY = "sista_token"
+
+export function getToken() {
+  try { return localStorage.getItem(TOKEN_KEY) || "" } catch { return "" }
+}
+export function setToken(t) {
+  try { localStorage.setItem(TOKEN_KEY, t) } catch {}
+}
+export function clearToken() {
+  try {
+    localStorage.removeItem(TOKEN_KEY)
+    localStorage.removeItem("sista_auth")
+  } catch {}
+}
+
+// Ajoute ?token=... aux liens ouverts directement par le navigateur (telechargements GET)
+export function withToken(url) {
+  const t = getToken()
+  if (!t) return url
+  return url + (url.includes("?") ? "&" : "?") + "token=" + encodeURIComponent(t)
+}
+
+// fetch + en-tete Authorization ; en cas de 401 on deconnecte l'utilisateur
+export async function authFetch(url, options = {}) {
+  const headers = { ...(options.headers || {}) }
+  const t = getToken()
+  if (t) headers["Authorization"] = `Bearer ${t}`
+  const res = await fetch(url, { ...options, headers })
+  if (res.status === 401 && !String(url).endsWith("/api/login")) {
+    clearToken()
+    window.location.reload()
+  }
+  return res
+}
+
 async function jsonFetch(path, options = {}) {
-  const res = await fetch(`${API_URL}${path}`, {
+  const res = await authFetch(`${API_URL}${path}`, {
     headers: { "Content-Type": "application/json", ...(options.headers || {}) },
     ...options,
   })
@@ -19,7 +57,25 @@ async function jsonFetch(path, options = {}) {
 }
 
 export const api = {
+  // Connexion : renvoie { ok, token }
+  login: async (username, password) => {
+    const res = await fetch(`${API_URL}/api/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    })
+    let data = {}
+    try { data = await res.json() } catch {}
+    if (!res.ok) throw new Error(data.detail || `Erreur ${res.status}`)
+    return data
+  },
+
   health: () => jsonFetch("/api/health"),
+
+  analysisScope: async (sessionId) => {
+    const res = await authFetch(`${API_URL}/api/session/${sessionId}/analysis-scope`)
+    return res.ok ? res.json() : null
+  },
 
   testKey: (apiName, apiKey) =>
     jsonFetch("/api/test-key", {
@@ -32,7 +88,7 @@ export const api = {
     const formData = new FormData()
     formData.append("data_file", dataFile)
     if (dictFile) formData.append("dict_file", dictFile)
-    const res = await fetch(`${API_URL}/api/preview-columns`, {
+    const res = await authFetch(`${API_URL}/api/preview-columns`, {
       method: "POST",
       body: formData,
     })
@@ -71,7 +127,7 @@ export const api = {
     if (variableOverrides && Object.keys(variableOverrides).length > 0) {
       formData.append("variable_overrides", JSON.stringify(variableOverrides))
     }
-    const res = await fetch(`${API_URL}/api/analyze`, {
+    const res = await authFetch(`${API_URL}/api/analyze`, {
       method: "POST",
       body: formData,
     })
@@ -93,7 +149,7 @@ export const api = {
     formData.append("data_file", dataFile)
     formData.append("start_col", startCol)
     formData.append("end_col", endCol)
-    const res = await fetch(`${API_URL}/api/compute-duration-stats`, {
+    const res = await authFetch(`${API_URL}/api/compute-duration-stats`, {
       method: "POST",
       body: formData,
     })
@@ -115,7 +171,7 @@ export const api = {
   previewColumnsOnly: async (dataFile) => {
     const formData = new FormData()
     formData.append("data_file", dataFile)
-    const res = await fetch(`${API_URL}/api/preview-columns-only`, {
+    const res = await authFetch(`${API_URL}/api/preview-columns-only`, {
       method: "POST",
       body: formData,
     })
@@ -132,7 +188,7 @@ export const api = {
     const formData = new FormData()
     formData.append("main_file", mainFile)
     formData.append("bc_file", bcFile)
-    const res = await fetch(`${API_URL}/api/backcheck/common-columns`, {
+    const res = await authFetch(`${API_URL}/api/backcheck/common-columns`, {
       method: "POST",
       body: formData,
     })
@@ -158,7 +214,7 @@ export const api = {
     if (mainEnqueteurCol) formData.append("main_enqueteur_col", mainEnqueteurCol)
     if (mainLabel) formData.append("main_label", mainLabel)
     if (bcLabel) formData.append("bc_label", bcLabel)
-    const res = await fetch(`${API_URL}/api/backcheck/run`, {
+    const res = await authFetch(`${API_URL}/api/backcheck/run`, {
       method: "POST",
       body: formData,
     })
@@ -180,14 +236,17 @@ export const api = {
     jsonFetch(`/api/session/${sessionId}/enqueteur-summary`),
 
   getExportUrl: (sessionId) =>
-    `${API_URL}/api/session/${sessionId}/export-excel`,
+    withToken(`${API_URL}/api/session/${sessionId}/export-excel`),
+
+  getSpotcheckReportUrl: (sessionId) =>
+    withToken(`${API_URL}/api/session/${sessionId}/spotcheck-report`),
 
   recomputeBasic: async (sessionId, params) => {
     const formData = new FormData()
     formData.append("duree_min", params.duree_min)
     formData.append("iqr_k", params.iqr_k)
     formData.append("missing_seuil", params.missing_seuil)
-    const res = await fetch(
+    const res = await authFetch(
       `${API_URL}/api/session/${sessionId}/recompute-basic`,
       { method: "POST", body: formData }
     )
@@ -206,7 +265,7 @@ export const api = {
     }),
 
   downloadReport: async (sessionId, reportContent = null) => {
-    const res = await fetch(
+    const res = await authFetch(
       `${API_URL}/api/session/${sessionId}/download-report`,
       {
         method: "POST",
@@ -244,7 +303,7 @@ export const api = {
 
   // Genere et telecharge le rapport QC .docx
   downloadQcReport: async (sessionId, metadata = {}) => {
-    const res = await fetch(
+    const res = await authFetch(
       `${API_URL}/api/session/${sessionId}/qc-report`,
       {
         method: "POST",
