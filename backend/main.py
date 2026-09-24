@@ -151,17 +151,56 @@ app.add_middleware(
     expose_headers=["Content-Disposition"],
 )
 
+# ----------------------------------------------------------------------
+#  Sessions en memoire
+#
+#  Une session conserve le DataFrame complet, le profil, les resultats QC,
+#  les resultats IA et le contenu du rapport (graphiques en base64). Sur une
+#  instance de 512 Mo, laisser ces objets s'accumuler finit par faire tuer le
+#  service pour depassement memoire. On purge donc :
+#    - les sessions inactives depuis plus de SESSION_TTL_SECONDS
+#    - les plus anciennes des que le nombre depasse MAX_SESSIONS
+#  Chaque acces a une session rafraichit son horodatage.
+# ----------------------------------------------------------------------
+SESSION_TTL_SECONDS = int(os.environ.get("SESSION_TTL_SECONDS", 2 * 3600))
+MAX_SESSIONS = int(os.environ.get("MAX_SESSIONS", 10))
+
 SESSIONS: dict = {}
 
 
+def _purge_sessions():
+    """Supprime les sessions expirees, puis plafonne leur nombre."""
+    now = time.time()
+    expirees = [sid for sid, s in SESSIONS.items()
+                if now - s.get("_last_seen", now) > SESSION_TTL_SECONDS]
+    for sid in expirees:
+        SESSIONS.pop(sid, None)
+
+    surplus = len(SESSIONS) - MAX_SESSIONS
+    evincees = []
+    if surplus > 0:
+        anciennes = sorted(SESSIONS.items(),
+                           key=lambda kv: kv[1].get("_last_seen", 0))[:surplus]
+        for sid, _ in anciennes:
+            SESSIONS.pop(sid, None)
+            evincees.append(sid)
+
+    if expirees or evincees:
+        print(f"[sessions] purge : {len(expirees)} expiree(s), "
+              f"{len(evincees)} evincee(s), {len(SESSIONS)} active(s)")
+
+
 def _save_session(session_id: str, data: dict):
+    data["_last_seen"] = time.time()
     SESSIONS[session_id] = data
+    _purge_sessions()
 
 
 def _get_session(session_id: str) -> dict:
     s = SESSIONS.get(session_id)
     if not s:
         raise HTTPException(404, "Session introuvable ou expiree")
+    s["_last_seen"] = time.time()
     return s
 
 
@@ -298,6 +337,8 @@ def health():
         "api1_configured": bool(os.environ.get("ANTHROPIC_API_KEY", "")),
         "api2_configured": bool(os.environ.get("GROQ_API_KEY", "")),
         "active_sessions": len(SESSIONS),
+        "max_sessions": MAX_SESSIONS,
+        "session_ttl_minutes": SESSION_TTL_SECONDS // 60,
     }
 
 
@@ -985,9 +1026,7 @@ def generate_qc_report_endpoint(session_id: str, req: GenerateQcReportRequest):
 @app.get("/api/session/{session_id}/spotcheck-report")
 async def get_spotcheck_report(session_id: str):
     """Genere le rapport analytique Spotcheck (avec IA)."""
-    sess = SESSIONS.get(session_id)
-    if not sess:
-        raise HTTPException(404, "Session introuvable")
+    sess = _get_session(session_id)
 
     df = sess.get("df")
     if df is None:
@@ -1026,10 +1065,11 @@ async def get_spotcheck_report(session_id: str):
 
 @app.delete("/api/session/{session_id}")
 def delete_session(session_id: str):
-    if session_id in SESSIONS:
-        del SESSIONS[session_id]
-        return {"ok": True}
-    raise HTTPException(404, "Session introuvable")
+    """Libere la memoire d'une session. Idempotent : supprimer une session
+    deja disparue n'est pas une erreur (le frontend appelle cette route en
+    'au cas ou', sans attendre la reponse)."""
+    existait = SESSIONS.pop(session_id, None) is not None
+    return {"ok": True, "existait": existait, "active_sessions": len(SESSIONS)}
 
 
 if __name__ == "__main__":

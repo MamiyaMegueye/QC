@@ -710,6 +710,10 @@ export default function Step1Import() {
       )
       return
     }
+    // Une nouvelle analyse remplace la precedente : on rend sa memoire au
+    // serveur au lieu de la laisser vivre jusqu'au redemarrage.
+    store.releaseSession()
+
     store.setIsAnalyzing(true)
     store.setApiError(null)
     try {

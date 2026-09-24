@@ -1,6 +1,7 @@
 // Etat global de l'application.
 
 import { create } from "zustand"
+import { api } from "../api/client"
 import {
   saveDraft, loadDraft, clearDraft,
   addHistoryEntry, loadHistory, removeHistoryEntry, clearHistory,
@@ -40,11 +41,23 @@ export const useStore = create((set, get) => ({
   isAuthenticated: isAuthFromStorage(),
   setAuthenticated: (v) => set({ isAuthenticated: v }),
   logout: () => {
+    // Libere la session AVANT d'effacer le jeton (sinon l'appel part sans
+    // autorisation et le serveur garde la memoire occupee)
+    get().releaseSession()
     try {
       localStorage.removeItem("sista_auth")
       localStorage.removeItem("sista_token")
     } catch {}
     set({ isAuthenticated: false })
+  },
+
+  // Demande au serveur d'oublier la session courante (liberation memoire).
+  // Appel "au cas ou" : on n'attend pas la reponse et on ignore les erreurs.
+  releaseSession: () => {
+    const sid = get().sessionId
+    if (!sid) return
+    set({ sessionId: null })
+    try { api.deleteSession(sid).catch(() => {}) } catch {}
   },
 
   // Etapes
@@ -294,7 +307,8 @@ export const useStore = create((set, get) => ({
   setIsGenerating: (v) => set({ isGenerating: v }),
 
   // Reset complet
-  reset: () =>
+  reset: () => {
+    get().releaseSession()
     set({
       currentStep: 1,
       dataFile: null,
@@ -328,7 +342,8 @@ export const useStore = create((set, get) => ({
       qcReportLoading: false,
       qcFilterEnqueteur: "__all__",
       qcFilterSuperviseur: "__all__",
-    }),
+    })
+  },
 
   // ====================================================================
   //  PERSISTANCE (localStorage) - Recommandation SISTA v2
