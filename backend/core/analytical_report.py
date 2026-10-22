@@ -40,11 +40,15 @@ from typing import Any
 import pandas as pd
 import numpy as np
 
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-from matplotlib.colors import LinearSegmentedColormap
-from matplotlib.patches import Rectangle
+try:
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import LinearSegmentedColormap
+    from matplotlib.patches import Rectangle
+    HAS_MATPLOTLIB = True
+except ImportError:
+    HAS_MATPLOTLIB = False
 
 from docx import Document
 from docx.shared import Inches, Pt, RGBColor, Cm
@@ -85,16 +89,19 @@ SISTA_PALETTE = [
 ]
 
 # Colormap sequentielle SISTA (beige clair -> navy profond)
-SISTA_CMAP = LinearSegmentedColormap.from_list(
-    "sista_seq",
-    [
-        (0.00, "#F4F7FA"),
-        (0.20, "#C5D2E0"),
-        (0.50, "#7A92B0"),
-        (0.80, "#2D4A6E"),
-        (1.00, "#13263D"),
-    ],
-)
+if HAS_MATPLOTLIB:
+    SISTA_CMAP = LinearSegmentedColormap.from_list(
+        "sista_seq",
+        [
+            (0.00, "#F4F7FA"),
+            (0.20, "#C5D2E0"),
+            (0.50, "#7A92B0"),
+            (0.80, "#2D4A6E"),
+            (1.00, "#13263D"),
+        ],
+    )
+else:
+    SISTA_CMAP = None
 
 
 
@@ -735,6 +742,8 @@ def _setup_sista_style():
 
 
 def _fig_to_png_bytes(fig) -> bytes:
+    if not HAS_MATPLOTLIB:
+        return None
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=150, bbox_inches="tight",
                 facecolor=SISTA["white"])
@@ -746,6 +755,8 @@ def _fig_to_png_bytes(fig) -> bytes:
 # ---- 1. HISTOGRAMME + KDE -------------------------------------------------
 
 def chart_histogram_kde(uni: dict) -> bytes:
+    if not HAS_MATPLOTLIB:
+        return None
     """Histogramme moderne avec courbe KDE en superposition."""
     _setup_sista_style()
     fig, ax = plt.subplots(figsize=(7.5, 4.5))
@@ -792,6 +803,8 @@ def chart_histogram_kde(uni: dict) -> bytes:
 # ---- 2. DONUT CHART -------------------------------------------------------
 
 def chart_donut(uni: dict) -> bytes:
+    if not HAS_MATPLOTLIB:
+        return None
     """Donut chart moderne avec total au centre et legende detaillee."""
     _setup_sista_style()
     fig, ax = plt.subplots(figsize=(8, 5))
@@ -842,6 +855,8 @@ def chart_donut(uni: dict) -> bytes:
 # ---- 3. LOLLIPOP CHART ----------------------------------------------------
 
 def chart_lollipop(uni: dict) -> bytes:
+    if not HAS_MATPLOTLIB:
+        return None
     """Lollipop chart horizontal - alternative moderne aux barres."""
     _setup_sista_style()
     dist = uni["distribution"]
@@ -894,6 +909,8 @@ def chart_lollipop(uni: dict) -> bytes:
 # ---- 4. HEATMAP -----------------------------------------------------------
 
 def chart_heatmap(biv: dict) -> bytes:
+    if not HAS_MATPLOTLIB:
+        return None
     """Heatmap pour croisement categoriel x categoriel (% par ligne)."""
     _setup_sista_style()
     ct = biv["crosstab"]
@@ -961,6 +978,8 @@ def chart_heatmap(biv: dict) -> bytes:
 # ---- 5. BOXPLOT HORIZONTAL ------------------------------------------------
 
 def chart_boxplot(biv: dict) -> bytes:
+    if not HAS_MATPLOTLIB:
+        return None
     """Boxplot horizontal pour croisement categoriel x numerique."""
     _setup_sista_style()
     raw = biv.get("raw_groups", {})
@@ -1009,6 +1028,8 @@ def chart_boxplot(biv: dict) -> bytes:
 
 
 def _chart_grouped_lollipop_fallback(biv: dict) -> bytes:
+    if not HAS_MATPLOTLIB:
+        return None
     """Lollipop des moyennes (fallback si raw_groups absent)."""
     _setup_sista_style()
     agg = biv["aggregation"]
@@ -1042,6 +1063,8 @@ def _chart_grouped_lollipop_fallback(biv: dict) -> bytes:
 # ---- 6. SCATTER + REGRESSION + IC 95% -------------------------------------
 
 def chart_scatter_regression(biv: dict) -> bytes:
+    if not HAS_MATPLOTLIB:
+        return None
     """Scatter avec droite de regression et bande de confiance a 95%."""
     _setup_sista_style()
     sc = biv["scatter"]
@@ -1093,6 +1116,8 @@ def chart_scatter_regression(biv: dict) -> bytes:
 # ---- 7. BAR VERTICAL ------------------------------------------------------
 
 def chart_bar_vertical(uni: dict) -> bytes:
+    if not HAS_MATPLOTLIB:
+        return None
     """Barres verticales modernes - impactantes pour 3-8 modalites.
 
     Plus carre que le donut, mieux que le lollipop pour faire ressortir
@@ -1149,6 +1174,8 @@ def chart_bar_vertical(uni: dict) -> bytes:
 # ---- 8. BAR HORIZONTAL ----------------------------------------------------
 
 def chart_bar_horizontal(uni: dict) -> bytes:
+    if not HAS_MATPLOTLIB:
+        return None
     """Barres horizontales classiques - ideales pour libelles longs.
 
     Alternative au lollipop avec un aspect plus solide / corporate.
@@ -1210,6 +1237,8 @@ def chart_bar_horizontal(uni: dict) -> bytes:
 # ---- 9. PARETO CHART ------------------------------------------------------
 
 def chart_pareto(uni: dict) -> bytes:
+    if not HAS_MATPLOTLIB:
+        return None
     """Pareto : barres triees DESC + courbe cumulee.
 
     Met en evidence le principe 80/20 : combien de modalites expliquent
@@ -1276,6 +1305,8 @@ def chart_pareto(uni: dict) -> bytes:
 # ---- 10. STACKED BAR 100% (bivarie cat x cat) ----------------------------
 
 def chart_stacked_100(biv: dict) -> bytes:
+    if not HAS_MATPLOTLIB:
+        return None
     """Barres empilees 100% : alternative a la heatmap pour cat x cat.
 
     Plus lisible que la heatmap quand on a peu de modalites en abscisse.
@@ -1340,6 +1371,8 @@ def chart_stacked_100(biv: dict) -> bytes:
 # ---- 11. VIOLIN PLOT (bivarie cat x num) ----------------------------------
 
 def chart_violin(biv: dict) -> bytes:
+    if not HAS_MATPLOTLIB:
+        return None
     """Violons : alternative au boxplot, montre la distribution complete.
 
     Plus moderne et plus informatif quand on veut voir la forme de la
@@ -1425,6 +1458,8 @@ def chart_violin(biv: dict) -> bytes:
 # ======================================================================
 
 def render_chart(item: dict, kind: str) -> bytes:
+    if not HAS_MATPLOTLIB:
+        return None
     """Dispatcher unifie des graphiques (avec fallbacks legacy)."""
     handlers = {
         # Types historiques (v1-v2)

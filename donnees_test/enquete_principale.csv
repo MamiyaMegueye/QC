@@ -1,0 +1,121 @@
+﻿code_menage;enqueteur;superviseur;wilaya;moughataa;commune;date_entretien;start;end;latitude;longitude;sexe_chef;age_chef;niveau_instruction;taille_menage;nb_enfants;source_eau;possede_telephone;a_recu_transfert;montant_transfert;nb_repas_jour;satisfaction_eau
+MEN0001;ENQ_02;SUP_AHMED;Nouakchott Sud;Arafat;El Mina;2026-09-07;2026-09-07 09:07:00;2026-09-07 09:44:00;18.06885;-16.0451;M;54;Coranique;5;2;Forage;Oui;Oui;4500;3;Tres satisfait
+MEN0002;ENQ_03;SUP_FATIMA;Nouakchott Ouest;Tevragh Zeina;Ksar;2026-09-07;2026-09-07 09:44:00;2026-09-07 10:11:00;18.04121;-15.91898;M;56;Secondaire;7;1;Forage;Oui;Oui;9000;3;Pas satisfait
+MEN0003;ENQ_04;SUP_FATIMA;Trarza;Rosso;Tekane;2026-09-07;2026-09-07 10:21:00;2026-09-07 11:06:00;18.15157;-15.95859;M;38;Coranique;4;2;Borne fontaine;Non;Oui;3000;3;Pas satisfait
+MEN0004;ENQ_05;SUP_MOHAMED;Brakna;Aleg;Male;2026-09-07;2026-09-07 10:58:00;2026-09-07 11:41:00;18.10362;-15.93887;F;31;Aucun;3;1;Borne fontaine;Oui;Oui;9000;3;Pas satisfait
+MEN0005;ENQ_01;SUP_AHMED;Nouakchott Nord;Dar Naim;Teyarett;2026-09-07;2026-09-07 11:35:00;2026-09-07 12:09:00;18.08237;-16.01141;M;62;Superieur;7;0;Puits;Oui;Non;;2;Pas satisfait
+MEN0006;ENQ_02;SUP_AHMED;Nouakchott Sud;Arafat;Arafat;2026-09-07;2026-09-07 12:12:00;2026-09-07 12:56:00;18.07319;-15.92123;M;54;Aucun;8;0;Robinet SNDE;Oui;Non;;2;Tres satisfait
+MEN0007;ENQ_03;SUP_FATIMA;Nouakchott Ouest;Tevragh Zeina;Tevragh Zeina;2026-09-07;2026-09-07 12:49:00;2026-09-07 13:29:00;18.06287;-15.91385;M;51;Primaire;9;5;Forage;Oui;Oui;6000;2;Tres satisfait
+MEN0008;ENQ_04;SUP_FATIMA;Trarza;Rosso;Rosso;2026-09-07;2026-09-07 13:26:00;2026-09-07 13:54:00;18.14066;-15.91846;F;64;Aucun;12;6;Forage;Oui;Oui;3000;2;Peu satisfait
+MEN0009;ENQ_05;SUP_MOHAMED;Brakna;Aleg;Male;2026-09-07;2026-09-07 14:03:00;2026-09-07 14:46:00;18.06354;-15.95792;M;30;Primaire;3;1;Robinet SNDE;Oui;Oui;3000;3;Satisfait
+MEN0010;ENQ_01;SUP_AHMED;Nouakchott Nord;Dar Naim;Teyarett;2026-09-07;2026-09-07 14:40:00;2026-09-07 15:11:00;18.01853;-15.95834;M;67;Coranique;6;3;Robinet SNDE;Oui;Oui;3000;2;Pas satisfait
+MEN0011;ENQ_02;SUP_AHMED;Nouakchott Sud;Arafat;El Mina;2026-09-07;2026-09-07 15:17:00;2026-09-07 15:56:00;18.00233;-16.03445;M;73;Superieur;11;6;Puits;Oui;Non;;2;Tres satisfait
+MEN0012;ENQ_03;SUP_FATIMA;Nouakchott Ouest;Tevragh Zeina;Tevragh Zeina;2026-09-07;2026-09-07 15:54:00;2026-09-07 16:40:00;18.02796;-16.03102;F;69;Secondaire;5;1;Robinet SNDE;Oui;Oui;6000;2;Peu satisfait
+MEN0013;ENQ_04;SUP_FATIMA;Trarza;Rosso;Tekane;2026-09-07;2026-09-07 16:31:00;2026-09-07 17:07:00;18.02057;-15.96401;F;26;Superieur;11;4;Charrette / vendeur;Non;Oui;9000;2;Satisfait
+MEN0014;ENQ_05;SUP_MOHAMED;Brakna;Aleg;Male;2026-09-07;2026-09-07 17:08:00;2026-09-07 17:43:00;17.98573;-15.9032;M;25;Aucun;8;6;Puits;Non;Non;;2;Peu satisfait
+MEN0015;ENQ_01;SUP_AHMED;Nouakchott Nord;Dar Naim;Teyarett;2026-09-07;2026-09-07 17:45:00;2026-09-07 18:31:00;18.14306;-15.91197;F;34;Coranique;9;0;Puits;Non;Non;;2;Satisfait
+MEN0016;ENQ_02;SUP_AHMED;Nouakchott Sud;Arafat;Arafat;2026-09-07;2026-09-07 18:22:00;2026-09-07 18:52:00;18.04989;-16.0178;F;23;Coranique;5;3;Borne fontaine;Non;Non;;2;Peu satisfait
+MEN0017;ENQ_03;SUP_FATIMA;Nouakchott Ouest;Tevragh Zeina;Tevragh Zeina;2026-09-07;2026-09-07 18:59:00;2026-09-07 19:26:00;18.14482;-15.95029;M;40;Primaire;3;1;Robinet SNDE;Oui;Oui;4500;2;Tres satisfait
+MEN0018;ENQ_04;SUP_FATIMA;Trarza;Rosso;Rosso;2026-09-08;2026-09-08 08:30:00;2026-09-08 09:06:00;18.05974;-15.96382;M;41;Coranique;5;2;Charrette / vendeur;Oui;Oui;9000;3;Satisfait
+MEN0019;ENQ_05;SUP_MOHAMED;Brakna;Aleg;Aleg;2026-09-08;2026-09-08 09:07:00;2026-09-08 09:58:00;18.14514;-15.92816;F;64;Aucun;8;0;Borne fontaine;Oui;Non;;2;Peu satisfait
+MEN0020;ENQ_01;SUP_AHMED;Nouakchott Nord;Dar Naim;Dar Naim;2026-09-08;2026-09-08 09:44:00;2026-09-08 10:26:00;18.06739;-15.88435;M;39;Aucun;6;1;Charrette / vendeur;Oui;Non;;3;Peu satisfait
+MEN0021;ENQ_02;SUP_AHMED;Nouakchott Sud;Arafat;Arafat;2026-09-08;2026-09-08 10:21:00;2026-09-08 10:52:00;18.10396;-15.9045;F;33;Primaire;8;5;Robinet SNDE;Oui;Non;;2;Peu satisfait
+MEN0022;ENQ_03;SUP_FATIMA;Nouakchott Ouest;Tevragh Zeina;Tevragh Zeina;2026-09-08;2026-09-08 10:58:00;2026-09-08 11:49:00;18.09564;-16.0256;M;70;Superieur;10;3;Forage;Oui;Non;;3;Tres satisfait
+MEN0023;ENQ_04;SUP_FATIMA;Trarza;Rosso;Tekane;2026-09-08;2026-09-08 11:35:00;2026-09-08 12:01:00;18.06641;-15.88306;M;34;Aucun;8;2;Puits;Non;Non;;3;Tres satisfait
+MEN0024;ENQ_05;SUP_MOHAMED;Brakna;Aleg;Male;2026-09-08;2026-09-08 12:12:00;2026-09-08 13:00:00;18.07773;-15.91308;M;70;Secondaire;2;0;Forage;Oui;Oui;9000;2;Pas satisfait
+MEN0025;ENQ_01;SUP_AHMED;Nouakchott Nord;Dar Naim;Teyarett;2026-09-08;2026-09-08 12:49:00;2026-09-08 13:41:00;17.99459;-15.91111;F;47;Aucun;9;4;Forage;Oui;Oui;9000;3;Peu satisfait
+MEN0026;ENQ_02;SUP_AHMED;Nouakchott Sud;Arafat;Arafat;2026-09-08;2026-09-08 13:26:00;2026-09-08 14:15:00;18.14702;-16.00529;M;61;Superieur;12;5;Puits;Oui;Oui;6000;3;Pas satisfait
+MEN0027;ENQ_03;SUP_FATIMA;Nouakchott Ouest;Tevragh Zeina;Tevragh Zeina;2026-09-08;2026-09-08 14:03:00;2026-09-08 14:48:00;18.07608;-16.03464;M;45;Coranique;9;7;Borne fontaine;Oui;Oui;6000;3;Tres satisfait
+MEN0028;ENQ_04;SUP_FATIMA;Trarza;Rosso;Tekane;2026-09-08;2026-09-08 14:40:00;2026-09-08 15:32:00;18.08242;-15.89445;M;57;Coranique;3;1;Charrette / vendeur;Oui;Oui;3000;2;Tres satisfait
+MEN0029;ENQ_05;SUP_MOHAMED;Brakna;Aleg;Aleg;2026-09-08;2026-09-08 15:17:00;2026-09-08 16:05:00;18.02278;-15.93417;F;41;Aucun;10;3;Robinet SNDE;Oui;Oui;6000;3;Pas satisfait
+MEN0030;ENQ_01;SUP_AHMED;Nouakchott Nord;Dar Naim;Dar Naim;2026-09-08;2026-09-08 15:54:00;2026-09-08 16:44:00;18.11066;-15.87293;F;63;Superieur;2;0;Puits;Non;Non;;2;Peu satisfait
+MEN0031;ENQ_02;SUP_AHMED;Nouakchott Sud;Arafat;Arafat;2026-09-08;2026-09-08 16:31:00;2026-09-08 17:07:00;18.00863;-15.9175;F;58;Secondaire;12;9;Robinet SNDE;Oui;Oui;9000;1;Tres satisfait
+MEN0032;ENQ_03;SUP_FATIMA;Nouakchott Ouest;Tevragh Zeina;Ksar;2026-09-08;2026-09-08 17:08:00;2026-09-08 17:49:00;18.07243;-15.94825;F;53;Primaire;4;0;Borne fontaine;Oui;Non;;1;Tres satisfait
+MEN0033;ENQ_04;SUP_FATIMA;Trarza;Rosso;Tekane;2026-09-08;2026-09-08 17:45:00;2026-09-08 18:22:00;18.06137;-15.94547;F;69;Coranique;9;6;Forage;Non;Non;;1;Peu satisfait
+MEN0034;ENQ_05;SUP_MOHAMED;Brakna;Aleg;Aleg;2026-09-08;2026-09-08 18:22:00;2026-09-08 19:12:00;18.09539;-16.02115;M;34;Superieur;12;4;Borne fontaine;Oui;Oui;7500;1;Tres satisfait
+MEN0035;ENQ_01;SUP_AHMED;Nouakchott Nord;Dar Naim;Teyarett;2026-09-08;2026-09-08 18:59:00;2026-09-08 19:38:00;18.0169;-16.02349;F;54;Coranique;4;1;Borne fontaine;Oui;Oui;3000;2;Tres satisfait
+MEN0036;ENQ_02;SUP_AHMED;Nouakchott Sud;Arafat;Arafat;2026-09-09;2026-09-09 08:30:00;2026-09-09 09:15:00;18.11194;-16.03286;F;45;Coranique;8;1;Forage;Non;Non;;3;Peu satisfait
+MEN0037;ENQ_03;SUP_FATIMA;Nouakchott Ouest;Tevragh Zeina;Ksar;2026-09-09;2026-09-09 09:07:00;2026-09-09 09:45:00;18.07507;-16.02904;F;70;Coranique;6;4;Puits;Oui;Non;;2;Pas satisfait
+MEN0038;ENQ_04;SUP_FATIMA;Trarza;Rosso;Rosso;2026-09-09;2026-09-09 09:44:00;2026-09-09 10:15:00;18.14057;-15.9656;M;32;Coranique;6;1;Borne fontaine;Non;Non;;2;Tres satisfait
+MEN0039;ENQ_05;SUP_MOHAMED;Brakna;Aleg;Male;2026-09-09;2026-09-09 10:21:00;2026-09-09 11:04:00;18.13051;-15.95598;F;36;Aucun;2;0;Charrette / vendeur;Oui;Non;;3;Satisfait
+MEN0040;ENQ_01;SUP_AHMED;Nouakchott Nord;Dar Naim;Teyarett;2026-09-09;2026-09-09 10:58:00;2026-09-09 11:42:00;18.04208;-15.87223;M;31;Aucun;12;2;Puits;Oui;Oui;3000;2;Tres satisfait
+MEN0041;ENQ_02;SUP_AHMED;Nouakchott Sud;Arafat;El Mina;2026-09-09;2026-09-09 11:35:00;2026-09-09 12:24:00;18.07774;-15.91978;M;25;Superieur;2;0;Forage;Non;Oui;3000;3;Tres satisfait
+MEN0042;ENQ_03;SUP_FATIMA;Nouakchott Ouest;Tevragh Zeina;Tevragh Zeina;2026-09-09;2026-09-09 12:12:00;2026-09-09 12:38:00;18.10317;-16.03675;F;71;Primaire;2;0;Charrette / vendeur;Oui;Non;;2;Tres satisfait
+MEN0043;ENQ_04;SUP_FATIMA;Trarza;Rosso;Tekane;2026-09-09;2026-09-09 12:49:00;2026-09-09 13:15:00;18.06;-15.99235;F;72;Aucun;8;5;Forage;Oui;Non;;1;Peu satisfait
+MEN0044;ENQ_05;SUP_MOHAMED;Brakna;Aleg;Aleg;2026-09-09;2026-09-09 13:26:00;2026-09-09 14:15:00;18.05448;-15.90602;M;34;Primaire;10;5;Puits;Oui;Oui;12000;1;Satisfait
+MEN0045;ENQ_01;SUP_AHMED;Nouakchott Nord;Dar Naim;Teyarett;2026-09-09;2026-09-09 14:03:00;2026-09-09 14:35:00;18.03638;-15.92392;M;26;Secondaire;2;0;Forage;Non;Non;;2;Satisfait
+MEN0046;ENQ_02;SUP_AHMED;Nouakchott Sud;Arafat;Arafat;2026-09-09;2026-09-09 14:40:00;2026-09-09 15:14:00;18.03389;-15.97403;F;35;Primaire;8;4;Forage;Oui;Oui;3000;3;Satisfait
+MEN0047;ENQ_03;SUP_FATIMA;Nouakchott Ouest;Tevragh Zeina;Ksar;2026-09-09;2026-09-09 15:17:00;2026-09-09 15:50:00;18.12746;-15.94404;F;73;Primaire;4;2;Charrette / vendeur;Oui;Non;;1;Satisfait
+MEN0048;ENQ_04;SUP_FATIMA;Trarza;Rosso;Rosso;2026-09-09;2026-09-09 15:54:00;2026-09-09 16:41:00;18.05828;-15.93407;F;50;Secondaire;12;6;Charrette / vendeur;Oui;Oui;4500;3;Pas satisfait
+MEN0049;ENQ_05;SUP_MOHAMED;Brakna;Aleg;Male;2026-09-09;2026-09-09 16:31:00;2026-09-09 17:14:00;18.13198;-15.90151;F;67;Coranique;4;0;Forage;Non;Oui;7500;2;Satisfait
+MEN0050;ENQ_01;SUP_AHMED;Nouakchott Nord;Dar Naim;Dar Naim;2026-09-09;2026-09-09 17:08:00;2026-09-09 17:57:00;18.00579;-15.97916;F;43;Secondaire;2;0;Puits;Non;Oui;7500;1;Peu satisfait
+MEN0051;ENQ_02;SUP_AHMED;Nouakchott Sud;Arafat;El Mina;2026-09-09;2026-09-09 17:45:00;2026-09-09 18:22:00;17.99683;-15.98744;M;21;Superieur;4;1;Borne fontaine;Oui;Non;;3;Peu satisfait
+MEN0052;ENQ_03;SUP_FATIMA;Nouakchott Ouest;Tevragh Zeina;Tevragh Zeina;2026-09-09;2026-09-09 18:22:00;2026-09-09 19:05:00;18.08655;-16.04623;M;22;Aucun;2;0;Puits;Oui;Non;;1;Peu satisfait
+MEN0053;ENQ_04;SUP_FATIMA;Trarza;Rosso;Rosso;2026-09-09;2026-09-09 18:59:00;2026-09-09 19:28:00;18.00603;-15.97922;F;73;Coranique;7;4;Puits;Oui;Non;;2;Satisfait
+MEN0054;ENQ_05;SUP_MOHAMED;Brakna;Aleg;Male;2026-09-10;2026-09-10 08:30:00;2026-09-10 09:00:00;18.00736;-16.02907;M;73;Coranique;6;2;Charrette / vendeur;Non;Oui;4500;3;Satisfait
+MEN0055;ENQ_01;SUP_AHMED;Nouakchott Nord;Dar Naim;Teyarett;2026-09-10;2026-09-10 09:07:00;2026-09-10 09:35:00;18.08076;-15.89934;M;49;Superieur;10;8;Forage;Oui;Non;;2;Peu satisfait
+MEN0056;ENQ_02;SUP_AHMED;Nouakchott Sud;Arafat;El Mina;2026-09-10;2026-09-10 09:44:00;2026-09-10 10:21:00;18.0878;-16.01245;M;54;Superieur;3;0;Charrette / vendeur;Non;Oui;7500;2;Pas satisfait
+MEN0057;ENQ_03;SUP_FATIMA;Nouakchott Ouest;Tevragh Zeina;Tevragh Zeina;2026-09-10;2026-09-10 10:21:00;2026-09-10 10:51:00;18.11502;-15.92682;F;58;Primaire;4;0;Puits;Oui;Non;;3;Satisfait
+MEN0058;ENQ_04;SUP_FATIMA;Trarza;Rosso;Rosso;2026-09-10;2026-09-10 10:58:00;2026-09-10 11:27:00;18.03953;-15.89056;M;26;Superieur;10;8;Borne fontaine;Oui;Non;;2;Tres satisfait
+MEN0059;ENQ_05;SUP_MOHAMED;Brakna;Aleg;Aleg;2026-09-10;2026-09-10 11:35:00;2026-09-10 12:07:00;18.08401;-15.93003;F;49;Coranique;11;0;Forage;Oui;Non;;1;Tres satisfait
+MEN0060;ENQ_01;SUP_AHMED;Nouakchott Nord;Dar Naim;Dar Naim;2026-09-10;2026-09-10 12:12:00;2026-09-10 12:50:00;18.0934;-16.01917;M;44;Secondaire;12;3;Robinet SNDE;Non;Non;;2;Tres satisfait
+MEN0061;ENQ_02;SUP_AHMED;Nouakchott Sud;Arafat;Arafat;2026-09-10;2026-09-10 12:49:00;2026-09-10 13:32:00;18.07392;-15.96871;M;27;Aucun;6;1;Forage;Non;Non;;3;Pas satisfait
+MEN0062;ENQ_03;SUP_FATIMA;Nouakchott Ouest;Tevragh Zeina;Ksar;2026-09-10;2026-09-10 13:26:00;2026-09-10 13:53:00;18.13566;-16.0037;M;59;Secondaire;9;3;Forage;Non;Oui;3000;2;Tres satisfait
+MEN0063;ENQ_04;SUP_FATIMA;Trarza;Rosso;Tekane;2026-09-10;2026-09-10 14:03:00;2026-09-10 14:32:00;18.15977;-15.88905;M;72;Primaire;6;0;Charrette / vendeur;Non;Non;;3;Peu satisfait
+MEN0064;ENQ_05;SUP_MOHAMED;Brakna;Aleg;Male;2026-09-10;2026-09-10 14:40:00;2026-09-10 15:26:00;18.04287;-16.03132;F;40;Superieur;7;5;Robinet SNDE;Oui;Oui;9000;2;Pas satisfait
+MEN0065;ENQ_01;SUP_AHMED;Nouakchott Nord;Dar Naim;Dar Naim;2026-09-10;2026-09-10 15:17:00;2026-09-10 15:47:00;18.07251;-15.96525;M;22;Primaire;6;1;Borne fontaine;Oui;Non;;3;Peu satisfait
+MEN0066;ENQ_02;SUP_AHMED;Nouakchott Sud;Arafat;Arafat;2026-09-10;2026-09-10 15:54:00;2026-09-10 16:45:00;18.13977;-15.91597;M;63;Coranique;9;2;Charrette / vendeur;Non;Non;;3;Tres satisfait
+MEN0067;ENQ_03;SUP_FATIMA;Nouakchott Ouest;Tevragh Zeina;Tevragh Zeina;2026-09-10;2026-09-10 16:31:00;2026-09-10 17:18:00;18.11694;-15.99582;M;49;Primaire;6;1;Forage;Non;Oui;7500;2;Satisfait
+MEN0068;ENQ_04;SUP_FATIMA;Trarza;Rosso;Tekane;2026-09-10;2026-09-10 17:08:00;2026-09-10 17:43:00;18.08917;-15.88862;M;48;Superieur;6;4;Borne fontaine;Non;Non;;1;Satisfait
+MEN0069;ENQ_05;SUP_MOHAMED;Brakna;Aleg;Male;2026-09-10;2026-09-10 17:45:00;2026-09-10 18:16:00;18.0763;-15.92376;F;26;Primaire;3;0;Borne fontaine;Oui;Oui;7500;2;Peu satisfait
+MEN0070;ENQ_01;SUP_AHMED;Nouakchott Nord;Dar Naim;Teyarett;2026-09-10;2026-09-10 18:22:00;2026-09-10 18:53:00;18.013;-15.89941;M;46;Coranique;6;0;Borne fontaine;Oui;Oui;7500;3;Peu satisfait
+MEN0071;ENQ_02;SUP_AHMED;Nouakchott Sud;Arafat;El Mina;2026-09-10;2026-09-10 18:59:00;2026-09-10 19:37:00;18.02016;-16.03745;M;68;Superieur;3;1;Borne fontaine;Oui;Oui;7500;1;Satisfait
+MEN0072;ENQ_03;SUP_FATIMA;Nouakchott Ouest;Tevragh Zeina;Ksar;2026-09-11;2026-09-11 08:30:00;2026-09-11 09:02:00;18.12204;-16.01292;F;69;Secondaire;9;5;Robinet SNDE;Oui;Oui;6000;3;Pas satisfait
+MEN0073;ENQ_04;SUP_FATIMA;Trarza;Rosso;Rosso;2026-09-11;2026-09-11 09:07:00;2026-09-11 09:41:00;18.04832;-15.93259;M;44;Aucun;11;2;Forage;Non;Non;;3;Pas satisfait
+MEN0074;ENQ_05;SUP_MOHAMED;Brakna;Aleg;Male;2026-09-11;2026-09-11 09:44:00;2026-09-11 10:13:00;18.15603;-15.89638;M;26;Primaire;8;6;Robinet SNDE;Oui;Oui;9000;1;Peu satisfait
+MEN0075;ENQ_01;SUP_AHMED;Nouakchott Nord;Dar Naim;Dar Naim;2026-09-11;2026-09-11 10:21:00;2026-09-11 10:50:00;18.10119;-15.9108;M;46;Secondaire;7;2;Charrette / vendeur;Oui;Non;;2;Tres satisfait
+MEN0076;ENQ_02;SUP_AHMED;Nouakchott Sud;Arafat;El Mina;2026-09-11;2026-09-11 10:58:00;2026-09-11 11:33:00;18.11971;-15.97379;F;46;Aucun;4;2;Charrette / vendeur;Oui;Oui;3000;2;Pas satisfait
+MEN0077;ENQ_03;SUP_FATIMA;Nouakchott Ouest;Tevragh Zeina;Tevragh Zeina;2026-09-11;2026-09-11 11:35:00;2026-09-11 12:18:00;18.11764;-15.97638;M;61;Coranique;7;2;Forage;Oui;Oui;6000;2;Satisfait
+MEN0078;ENQ_04;SUP_FATIMA;Trarza;Rosso;Tekane;2026-09-11;2026-09-11 12:12:00;2026-09-11 12:54:00;18.15808;-16.0472;F;27;Superieur;3;1;Puits;Oui;Oui;6000;2;Satisfait
+MEN0079;ENQ_05;SUP_MOHAMED;Brakna;Aleg;Male;2026-09-11;2026-09-11 12:49:00;2026-09-11 13:31:00;18.155;-15.94184;M;31;Superieur;6;4;Forage;Non;Non;;2;Pas satisfait
+MEN0080;ENQ_01;SUP_AHMED;Nouakchott Nord;Dar Naim;Teyarett;2026-09-11;2026-09-11 13:26:00;2026-09-11 14:08:00;18.12517;-15.87387;M;49;Coranique;6;3;Forage;Oui;Oui;9000;1;Satisfait
+MEN0081;ENQ_02;SUP_AHMED;Nouakchott Sud;Arafat;Arafat;2026-09-11;2026-09-11 14:03:00;2026-09-11 14:34:00;17.98856;-15.90061;M;23;Secondaire;4;1;Robinet SNDE;Oui;Oui;6000;2;Pas satisfait
+MEN0082;ENQ_03;SUP_FATIMA;Nouakchott Ouest;Tevragh Zeina;Tevragh Zeina;2026-09-11;2026-09-11 14:40:00;2026-09-11 15:25:00;18.02279;-15.88531;F;64;Secondaire;10;8;Forage;Oui;Non;;2;Satisfait
+MEN0083;ENQ_04;SUP_FATIMA;Trarza;Rosso;Rosso;2026-09-11;2026-09-11 15:17:00;2026-09-11 16:05:00;18.10339;-16.0498;M;72;Coranique;8;1;Charrette / vendeur;Oui;Oui;12000;2;Pas satisfait
+MEN0084;ENQ_05;SUP_MOHAMED;Brakna;Aleg;Aleg;2026-09-11;2026-09-11 15:54:00;2026-09-11 16:43:00;18.09905;-15.99838;M;68;Aucun;4;1;Charrette / vendeur;Oui;Non;;2;Tres satisfait
+MEN0085;ENQ_01;SUP_AHMED;Nouakchott Nord;Dar Naim;Dar Naim;2026-09-11;2026-09-11 16:31:00;2026-09-11 17:11:00;18.00831;-16.00691;F;73;Primaire;6;4;Borne fontaine;Non;Non;;1;Pas satisfait
+MEN0086;ENQ_02;SUP_AHMED;Nouakchott Sud;Arafat;Arafat;2026-09-11;2026-09-11 17:08:00;2026-09-11 17:35:00;18.00037;-15.99783;M;62;Aucun;5;2;Charrette / vendeur;Oui;Oui;7500;1;Peu satisfait
+MEN0087;ENQ_03;SUP_FATIMA;Nouakchott Ouest;Tevragh Zeina;Tevragh Zeina;2026-09-11;2026-09-11 17:45:00;2026-09-11 18:12:00;18.13052;-15.90192;F;37;Superieur;7;3;Robinet SNDE;Non;Oui;9000;1;Tres satisfait
+MEN0088;ENQ_04;SUP_FATIMA;Trarza;Rosso;Tekane;2026-09-11;2026-09-11 18:22:00;2026-09-11 19:05:00;18.12259;-15.92036;F;31;Primaire;8;1;Forage;Oui;Oui;3000;2;Peu satisfait
+MEN0089;ENQ_05;SUP_MOHAMED;Brakna;Aleg;Aleg;2026-09-11;2026-09-11 18:59:00;2026-09-11 19:35:00;18.15563;-15.89152;F;70;Primaire;7;4;Forage;Oui;Non;;2;Tres satisfait
+MEN0090;ENQ_01;SUP_AHMED;Nouakchott Nord;Dar Naim;Dar Naim;2026-09-12;2026-09-12 08:30:00;2026-09-12 09:12:00;18.01971;-16.00093;M;72;Primaire;4;2;Borne fontaine;Oui;Oui;4500;3;Satisfait
+MEN0091;ENQ_02;SUP_AHMED;Nouakchott Sud;Arafat;Arafat;2026-09-12;2026-09-12 09:07:00;2026-09-12 09:35:00;18.08267;-16.04504;F;70;Aucun;8;4;Robinet SNDE;Oui;Oui;7500;3;Pas satisfait
+MEN0092;ENQ_03;SUP_FATIMA;Nouakchott Ouest;Tevragh Zeina;Tevragh Zeina;2026-09-12;2026-09-12 09:44:00;2026-09-12 10:16:00;17.99856;-15.90736;M;68;Coranique;2;0;Borne fontaine;Oui;Non;;3;Satisfait
+MEN0093;ENQ_04;SUP_FATIMA;Trarza;Rosso;Rosso;2026-09-12;2026-09-12 10:21:00;2026-09-12 10:55:00;18.01832;-16.00775;F;35;Aucun;6;0;Borne fontaine;Oui;Oui;12000;3;Peu satisfait
+MEN0094;ENQ_05;SUP_MOHAMED;Brakna;Aleg;Aleg;2026-09-12;2026-09-12 10:58:00;2026-09-12 11:28:00;17.99809;-15.95752;F;61;Coranique;4;0;Forage;Oui;Non;;3;Peu satisfait
+MEN0095;ENQ_01;SUP_AHMED;Nouakchott Nord;Dar Naim;Dar Naim;2026-09-12;2026-09-12 11:35:00;2026-09-12 12:21:00;18.10567;-16.01122;F;61;Aucun;4;0;Borne fontaine;Non;Oui;3000;2;Peu satisfait
+MEN0096;ENQ_02;SUP_AHMED;Nouakchott Sud;Arafat;El Mina;2026-09-12;2026-09-12 12:12:00;2026-09-12 12:49:00;18.09194;-15.9169;M;59;Primaire;4;2;Forage;Oui;Non;;1;Peu satisfait
+MEN0097;ENQ_03;SUP_FATIMA;Nouakchott Ouest;Tevragh Zeina;Ksar;2026-09-12;2026-09-12 12:49:00;2026-09-12 13:26:00;18.0851;-15.899;M;54;Primaire;4;2;Borne fontaine;Oui;Non;;2;Tres satisfait
+MEN0098;ENQ_04;SUP_FATIMA;Trarza;Rosso;Tekane;2026-09-12;2026-09-12 13:26:00;2026-09-12 13:57:00;18.12038;-15.99109;M;35;Secondaire;8;4;Charrette / vendeur;Oui;Oui;12000;2;Satisfait
+MEN0099;ENQ_05;SUP_MOHAMED;Brakna;Aleg;Aleg;2026-09-12;2026-09-12 14:03:00;2026-09-12 14:47:00;18.10593;-16.02689;F;34;Aucun;6;4;Borne fontaine;Oui;Non;;3;Pas satisfait
+MEN0100;ENQ_01;SUP_AHMED;Nouakchott Nord;Dar Naim;Teyarett;2026-09-12;2026-09-12 14:40:00;2026-09-12 15:17:00;18.06819;-15.97439;F;33;Secondaire;2;0;Robinet SNDE;Oui;Oui;7500;1;Peu satisfait
+MEN0101;ENQ_02;SUP_AHMED;Nouakchott Sud;Arafat;El Mina;2026-09-12;2026-09-12 15:17:00;2026-09-12 16:02:00;18.15881;-15.98124;M;43;Coranique;8;2;Charrette / vendeur;Oui;Oui;12000;2;Pas satisfait
+MEN0102;ENQ_03;SUP_FATIMA;Nouakchott Ouest;Tevragh Zeina;Tevragh Zeina;2026-09-12;2026-09-12 15:54:00;2026-09-12 16:39:00;18.00418;-15.87232;M;63;Superieur;8;6;Charrette / vendeur;Oui;Oui;4500;3;Tres satisfait
+MEN0103;ENQ_04;SUP_FATIMA;Trarza;Rosso;Rosso;2026-09-12;2026-09-12 16:31:00;2026-09-12 16:59:00;18.11458;-16.01586;F;24;Superieur;6;0;Borne fontaine;Oui;Oui;4500;2;Tres satisfait
+MEN0104;ENQ_05;SUP_MOHAMED;Brakna;Aleg;Aleg;2026-09-12;2026-09-12 17:08:00;2026-09-12 17:37:00;18.07942;-16.03561;F;67;Primaire;7;1;Robinet SNDE;Oui;Non;;2;Pas satisfait
+MEN0105;ENQ_01;SUP_AHMED;Nouakchott Nord;Dar Naim;Teyarett;2026-09-12;2026-09-12 17:45:00;2026-09-12 18:29:00;18.12978;-15.91302;F;52;Superieur;8;4;Forage;Non;Non;;3;Satisfait
+MEN0106;ENQ_02;SUP_AHMED;Nouakchott Sud;Arafat;El Mina;2026-09-12;2026-09-12 18:22:00;2026-09-12 18:57:00;18.14092;-15.93001;M;64;Aucun;3;1;Robinet SNDE;Oui;Oui;6000;2;Pas satisfait
+MEN0107;ENQ_03;SUP_FATIMA;Nouakchott Ouest;Tevragh Zeina;Ksar;2026-09-12;2026-09-12 18:59:00;2026-09-12 19:26:00;18.12057;-15.94081;M;52;Primaire;9;5;Robinet SNDE;Oui;Oui;12000;3;Pas satisfait
+MEN0108;ENQ_04;SUP_FATIMA;Trarza;Rosso;Tekane;2026-09-13;2026-09-13 08:30:00;2026-09-13 09:10:00;18.02424;-15.92133;F;31;Superieur;3;0;Charrette / vendeur;Non;Oui;7500;3;Peu satisfait
+MEN0109;ENQ_05;SUP_MOHAMED;Brakna;Aleg;Aleg;2026-09-13;2026-09-13 09:07:00;2026-09-13 09:56:00;18.02601;-15.97412;M;48;Secondaire;11;6;Forage;Oui;Non;;2;Pas satisfait
+MEN0110;ENQ_01;SUP_AHMED;Nouakchott Nord;Dar Naim;Teyarett;2026-09-13;2026-09-13 09:44:00;2026-09-13 10:17:00;18.13837;-15.87802;M;42;Primaire;12;2;Forage;Non;Oui;6000;3;Satisfait
+MEN0111;ENQ_02;SUP_AHMED;Nouakchott Sud;Arafat;El Mina;2026-09-13;2026-09-13 10:21:00;2026-09-13 10:55:00;18.11206;-16.03563;F;47;Secondaire;5;3;Charrette / vendeur;Oui;Non;;2;Pas satisfait
+MEN0112;ENQ_03;SUP_FATIMA;Nouakchott Ouest;Tevragh Zeina;Ksar;2026-09-13;2026-09-13 10:58:00;2026-09-13 11:25:00;17.99442;-15.99017;M;23;Superieur;10;1;Robinet SNDE;Oui;Oui;6000;2;Tres satisfait
+MEN0113;ENQ_04;SUP_FATIMA;Trarza;Rosso;Tekane;2026-09-13;2026-09-13 11:35:00;2026-09-13 12:09:00;18.08481;-15.99147;M;50;Superieur;11;0;Puits;Oui;Oui;7500;3;Pas satisfait
+MEN0114;ENQ_05;SUP_MOHAMED;Brakna;Aleg;Male;2026-09-13;2026-09-13 12:12:00;2026-09-13 13:04:00;18.14439;-15.97548;M;69;Secondaire;7;5;Puits;Oui;Non;;2;Pas satisfait
+MEN0115;ENQ_01;SUP_AHMED;Nouakchott Nord;Dar Naim;Dar Naim;2026-09-13;2026-09-13 12:49:00;2026-09-13 13:27:00;18.03037;-15.98215;F;62;Secondaire;3;0;Charrette / vendeur;Oui;Oui;6000;3;Peu satisfait
+MEN0116;ENQ_02;SUP_AHMED;Nouakchott Sud;Arafat;El Mina;2026-09-13;2026-09-13 13:26:00;2026-09-13 14:12:00;18.00618;-16.02114;M;40;Superieur;4;1;Robinet SNDE;Non;Oui;4500;2;Peu satisfait
+MEN0117;ENQ_03;SUP_FATIMA;Nouakchott Ouest;Tevragh Zeina;Ksar;2026-09-13;2026-09-13 14:03:00;2026-09-13 14:52:00;18.14774;-15.97603;F;27;Secondaire;12;0;Robinet SNDE;Non;Oui;7500;2;Tres satisfait
+MEN0118;ENQ_04;SUP_FATIMA;Trarza;Rosso;Rosso;2026-09-13;2026-09-13 14:40:00;2026-09-13 15:31:00;18.04748;-15.97588;M;48;Primaire;12;7;Puits;Non;Non;;2;Pas satisfait
+MEN0119;ENQ_05;SUP_MOHAMED;Brakna;Aleg;Aleg;2026-09-13;2026-09-13 15:17:00;2026-09-13 15:56:00;17.99608;-15.88508;F;37;Secondaire;6;4;Robinet SNDE;Non;Oui;7500;2;Peu satisfait
+MEN0120;ENQ_01;SUP_AHMED;Nouakchott Nord;Dar Naim;Teyarett;2026-09-13;2026-09-13 15:54:00;2026-09-13 16:32:00;18.02894;-15.87602;M;37;Superieur;12;5;Forage;Oui;Non;;3;Pas satisfait

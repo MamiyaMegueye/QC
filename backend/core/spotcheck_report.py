@@ -21,9 +21,13 @@ Si l'IA echoue (pas de cle, timeout), le rapport se degrade gracieusement.
 
 import pandas as pd
 import numpy as np
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
+try:
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    HAS_MATPLOTLIB = True
+except ImportError:
+    HAS_MATPLOTLIB = False
 from datetime import datetime
 import os
 import json
@@ -426,6 +430,8 @@ def make_chart_dir():
 
 
 def chart_wilaya_pie(geo_data, chart_dir):
+    if not HAS_MATPLOTLIB:
+        return None
     if not geo_data.get("available"):
         return None
     wilayas = geo_data["wilayas"]
@@ -455,6 +461,8 @@ def chart_wilaya_pie(geo_data, chart_dir):
 
 
 def chart_section_durations(sections_data, chart_dir):
+    if not HAS_MATPLOTLIB:
+        return None
     if not sections_data.get("available"):
         return None
     sections = sections_data["sections"]
@@ -496,6 +504,8 @@ def chart_section_durations(sections_data, chart_dir):
 
 
 def chart_sections_hors_bornes(sections_data, chart_dir):
+    if not HAS_MATPLOTLIB:
+        return None
     """Bar chart empile : par section, % court + % long."""
     if not sections_data.get("available"):
         return None

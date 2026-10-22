@@ -1,0 +1,48 @@
+﻿code_menage;controleur;date_backcheck;sexe_chef;age_chef;taille_menage;nb_enfants;source_eau;possede_telephone;a_recu_transfert;montant_transfert
+MEN0001;CTRL_01;2026-09-14;M;54;5;2;Forage;Oui;Oui;4400
+MEN0002;CTRL_02;2026-09-14;M;56;10;0;Borne fontaine;Oui;Oui;9300
+MEN0003;CTRL_01;2026-09-14;F;54;1;5;Borne fontaine;Oui;Non;
+MEN0006;CTRL_02;2026-09-14;M;54;8;0;Robinet SNDE;Oui;Non;
+MEN0008;CTRL_01;2026-09-14;M;64;16;4;Forage;Non;Oui;1500
+MEN0013;CTRL_02;2026-09-14;F;26;11;1;Robinet SNDE;Oui;Non;
+MEN0016;CTRL_01;2026-09-14;F;24;5;3;Borne fontaine;Non;Non;
+MEN0019;CTRL_02;2026-09-14;F;65;8;0;Puits;Oui;Non;
+MEN0020;CTRL_01;2026-09-14;M;39;6;1;Charrette / vendeur;Oui;Non;
+MEN0021;CTRL_02;2026-09-14;F;33;8;5;Robinet SNDE;Oui;Non;
+MEN0025;CTRL_01;2026-09-14;F;47;9;4;Forage;Oui;Oui;8900
+MEN0028;CTRL_02;2026-09-14;M;57;1;4;Charrette / vendeur;Non;Oui;
+MEN0030;CTRL_01;2026-09-15;F;64;2;0;Charrette / vendeur;Non;Non;
+MEN0031;CTRL_02;2026-09-15;F;58;12;9;Robinet SNDE;Oui;Oui;9100
+MEN0032;CTRL_01;2026-09-15;F;62;9;0;Borne fontaine;Oui;Non;
+MEN0035;CTRL_02;2026-09-15;F;55;4;1;Robinet SNDE;Oui;Oui;2900
+MEN0036;CTRL_01;2026-09-15;F;54;8;1;Forage;Non;Non;
+MEN0044;CTRL_02;2026-09-15;M;34;10;5;Puits;Oui;Oui;12000
+MEN0049;CTRL_01;2026-09-15;F;67;4;0;Forage;Non;Oui;7300
+MEN0050;CTRL_02;2026-09-15;F;44;2;0;Puits;Non;Oui;7600
+MEN0054;CTRL_01;2026-09-15;M;85;6;2;Charrette / vendeur;Non;Oui;4700
+MEN0055;CTRL_02;2026-09-15;M;48;10;8;Forage;Oui;Non;
+MEN0058;CTRL_01;2026-09-15;F;42;10;8;Puits;Non;Oui;
+MEN0059;CTRL_02;2026-09-15;F;48;11;0;Forage;Oui;Non;
+MEN0063;CTRL_01;2026-09-16;F;72;6;3;Borne fontaine;Non;Non;
+MEN0066;CTRL_02;2026-09-16;M;63;9;2;Charrette / vendeur;Non;Non;
+MEN0067;CTRL_01;2026-09-16;M;49;6;1;Forage;Oui;Non;
+MEN0068;CTRL_02;2026-09-16;M;47;6;7;Charrette / vendeur;Non;Oui;
+MEN0069;CTRL_01;2026-09-16;F;25;3;0;Borne fontaine;Oui;Oui;7600
+MEN0070;CTRL_02;2026-09-16;M;;6;0;Forage;Oui;Oui;7700
+MEN0079;CTRL_01;2026-09-16;M;32;6;4;Charrette / vendeur;Non;Non;
+MEN0080;CTRL_02;2026-09-16;M;49;6;3;Forage;Oui;Oui;9200
+MEN0081;CTRL_01;2026-09-16;M;23;4;1;Robinet SNDE;Oui;Oui;6000
+MEN0085;CTRL_02;2026-09-16;F;72;6;4;Borne fontaine;Non;Non;
+MEN0086;CTRL_01;2026-09-16;M;62;5;2;Charrette / vendeur;Oui;Oui;7200
+MEN0088;CTRL_02;2026-09-16;M;17;8;3;Forage;Non;Non;
+MEN0091;CTRL_01;2026-09-17;F;69;8;4;Robinet SNDE;Oui;Oui;16500
+MEN0092;CTRL_02;2026-09-17;M;80;1;0;Puits;Oui;Non;
+MEN0101;CTRL_01;2026-09-17;M;42;8;2;Charrette / vendeur;Oui;Oui;12000
+MEN0102;CTRL_02;2026-09-17;M;52;8;6;Charrette / vendeur;Oui;Oui;4500
+MEN0104;CTRL_01;2026-09-17;F;66;7;1;Robinet SNDE;Oui;Non;
+MEN0105;CTRL_02;2026-09-17;F;53;8;4;Borne fontaine;Non;Non;
+MEN0106;CTRL_01;2026-09-17;M;64;3;1;Robinet SNDE;Oui;Oui;6200
+MEN0112;CTRL_02;2026-09-17;M;23;10;1;Robinet SNDE;Oui;Oui;10800
+MEN0118;CTRL_01;2026-09-17;M;60;15;10;Puits;Oui;Non;
+MEN0777;CTRL_02;2026-09-18;F;41;6;3;Borne fontaine;Oui;Oui;6000
+MEN0888;CTRL_02;2026-09-18;F;41;6;3;Borne fontaine;Oui;Oui;6000
