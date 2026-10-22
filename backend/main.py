@@ -31,6 +31,8 @@ import hmac
 import base64
 import hashlib
 import tempfile
+import pickle
+import gzip
 from typing import Optional
 
 import pandas as pd
@@ -167,6 +169,10 @@ MAX_SESSIONS = int(os.environ.get("MAX_SESSIONS", 10))
 
 SESSIONS: dict = {}
 
+# Repertoire /tmp pour persister les sessions entre invocations serverless
+SESSION_DIR = os.path.join(tempfile.gettempdir(), "sista_sessions")
+os.makedirs(SESSION_DIR, exist_ok=True)
+
 
 def _purge_sessions():
     """Supprime les sessions expirees, puis plafonne leur nombre."""
@@ -175,6 +181,10 @@ def _purge_sessions():
                 if now - s.get("_last_seen", now) > SESSION_TTL_SECONDS]
     for sid in expirees:
         SESSIONS.pop(sid, None)
+        try:
+            os.remove(os.path.join(SESSION_DIR, f"{sid}.pkl.gz"))
+        except OSError:
+            pass
 
     surplus = len(SESSIONS) - MAX_SESSIONS
     evincees = []
@@ -184,6 +194,10 @@ def _purge_sessions():
         for sid, _ in anciennes:
             SESSIONS.pop(sid, None)
             evincees.append(sid)
+            try:
+                os.remove(os.path.join(SESSION_DIR, f"{sid}.pkl.gz"))
+            except OSError:
+                pass
 
     if expirees or evincees:
         print(f"[sessions] purge : {len(expirees)} expiree(s), "
@@ -193,15 +207,34 @@ def _purge_sessions():
 def _save_session(session_id: str, data: dict):
     data["_last_seen"] = time.time()
     SESSIONS[session_id] = data
+    # Persister dans /tmp pour reutilisation entre invocations warm
+    try:
+        path = os.path.join(SESSION_DIR, f"{session_id}.pkl.gz")
+        with gzip.open(path, "wb") as f:
+            pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
+    except Exception as e:
+        print(f"[sessions] erreur sauvegarde /tmp : {e}")
     _purge_sessions()
 
 
 def _get_session(session_id: str) -> dict:
+    # 1. Memoire (meme instance)
     s = SESSIONS.get(session_id)
-    if not s:
-        raise HTTPException(404, "Session introuvable ou expiree")
-    s["_last_seen"] = time.time()
-    return s
+    if s:
+        s["_last_seen"] = time.time()
+        return s
+    # 2. /tmp (instance warm reutilisee)
+    try:
+        path = os.path.join(SESSION_DIR, f"{session_id}.pkl.gz")
+        if os.path.exists(path):
+            with gzip.open(path, "rb") as f:
+                s = pickle.load(f)
+            s["_last_seen"] = time.time()
+            SESSIONS[session_id] = s
+            return s
+    except Exception as e:
+        print(f"[sessions] erreur lecture /tmp : {e}")
+    raise HTTPException(404, "Session introuvable ou expiree. Veuillez recharger votre fichier.")
 
 
 class LoginRequest(BaseModel):
