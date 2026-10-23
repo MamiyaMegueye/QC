@@ -161,15 +161,15 @@ export const useStore = create((set, get) => ({
 
   // Config IA
   selectedApi: "api1",
-  apiKey1: "",
-  apiKey2: "",
+  apiKey1: (() => { try { return localStorage.getItem("sista_apiKey1") || "" } catch { return "" } })(),
+  apiKey2: (() => { try { return localStorage.getItem("sista_apiKey2") || "" } catch { return "" } })(),
   api1Status: null,
   api2Status: null,
   api1Configured: false,
   api2Configured: false,
   setSelectedApi: (api) => set({ selectedApi: api }),
-  setApiKey1: (k) => set({ apiKey1: k, api1Status: null }),
-  setApiKey2: (k) => set({ apiKey2: k, api2Status: null }),
+  setApiKey1: (k) => { try { localStorage.setItem("sista_apiKey1", k) } catch {} set({ apiKey1: k, api1Status: null }) },
+  setApiKey2: (k) => { try { localStorage.setItem("sista_apiKey2", k) } catch {} set({ apiKey2: k, api2Status: null }) },
   setApiStatus: (api, status) =>
     set(api === "api1" ? { api1Status: status } : { api2Status: status }),
   setApiConfigured: ({ api1Configured, api2Configured }) =>
