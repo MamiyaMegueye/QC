@@ -1,5 +1,4 @@
 import { useState, useRef } from "react"
-import { useStore } from "../../store/useStore"
 import { api } from "../../api/client"
 import {
   FileText,
@@ -14,10 +13,6 @@ import {
 } from "lucide-react"
 
 export default function Step5XlsForm() {
-  const apiKey1 = useStore((s) => s.apiKey1)
-  const apiKey2 = useStore((s) => s.apiKey2)
-  const selectedApi = useStore((s) => s.selectedApi)
-
   const [noteCadrageFile, setNoteCadrageFile] = useState(null)
   const [cadreResultatsFile, setCadreResultatsFile] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -26,18 +21,20 @@ export default function Step5XlsForm() {
   const [resultBlob, setResultBlob] = useState(null)
   const [resultFilename, setResultFilename] = useState("")
 
+  // API locale au composant
+  const [localApi, setLocalApi] = useState("api1")
+  const [localApiKey, setLocalApiKey] = useState("")
+
   const ncFileRef = useRef(null)
   const crFileRef = useRef(null)
-
-  const currentApiKey = selectedApi === "api1" ? apiKey1 : apiKey2
 
   const handleGenerate = async () => {
     if (!noteCadrageFile) {
       setError("Veuillez charger la note de cadrage (.docx)")
       return
     }
-    if (!currentApiKey) {
-      setError("Veuillez configurer une cle API dans l'etape Importer")
+    if (!localApiKey.trim()) {
+      setError("Veuillez saisir une cle API")
       return
     }
 
@@ -49,8 +46,8 @@ export default function Step5XlsForm() {
     try {
       const { blob, filename } = await api.generateQuestionnaire(
         noteCadrageFile,
-        currentApiKey,
-        selectedApi,
+        localApiKey.trim(),
+        localApi,
         cadreResultatsFile
       )
       setResultBlob(blob)
@@ -91,6 +88,43 @@ export default function Step5XlsForm() {
         </div>
       </div>
 
+      {/* Choix API */}
+      <div className="bg-white rounded-2xl p-6 shadow-card border border-gray-200">
+        <h3 className="font-sora font-semibold text-navy mb-4">Configuration IA</h3>
+
+        <div className="flex items-center gap-6 mb-4">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="radio"
+              name="step5api"
+              checked={localApi === "api1"}
+              onChange={() => setLocalApi("api1")}
+              className="w-4 h-4 text-navy accent-navy"
+            />
+            <span className="text-sm font-medium text-gray-700">API 1 (Claude)</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="radio"
+              name="step5api"
+              checked={localApi === "api2"}
+              onChange={() => setLocalApi("api2")}
+              className="w-4 h-4 text-navy accent-navy"
+            />
+            <span className="text-sm font-medium text-gray-700">API 2 (Groq)</span>
+          </label>
+        </div>
+
+        <input
+          type="password"
+          placeholder={localApi === "api1" ? "Cle API Claude (sk-ant-...)" : "Cle API Groq (gsk_...)"}
+          value={localApiKey}
+          onChange={(e) => setLocalApiKey(e.target.value)}
+          className="w-full px-4 py-2.5 rounded-xl border border-gray-300 text-sm focus:ring-2 focus:ring-navy/20 focus:border-navy outline-none transition-all"
+        />
+      </div>
+
+      {/* Upload fichiers */}
       <div className="bg-white rounded-2xl p-6 shadow-card border border-gray-200">
         <h3 className="font-sora font-semibold text-navy mb-4">
           1. Note de cadrage (obligatoire)
@@ -188,6 +222,7 @@ export default function Step5XlsForm() {
         />
       </div>
 
+      {/* Bouton + resultat */}
       <div className="bg-white rounded-2xl p-6 shadow-card border border-gray-200">
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4 flex items-start gap-2">
@@ -219,9 +254,9 @@ export default function Step5XlsForm() {
 
         <button
           onClick={handleGenerate}
-          disabled={loading || !noteCadrageFile || !currentApiKey}
+          disabled={loading || !noteCadrageFile || !localApiKey.trim()}
           className={`w-full py-3 rounded-xl font-sora font-semibold text-sm flex items-center justify-center gap-2 transition-all ${
-            loading || !noteCadrageFile || !currentApiKey
+            loading || !noteCadrageFile || !localApiKey.trim()
               ? "bg-gray-200 text-gray-400 cursor-not-allowed"
               : "bg-navy hover:bg-navy/90 text-white shadow-lg"
           }`}
@@ -238,12 +273,6 @@ export default function Step5XlsForm() {
             </>
           )}
         </button>
-
-        {!currentApiKey && (
-          <p className="text-xs text-amber-600 mt-2 text-center">
-            Configurez une cle API dans l'etape "Importer" pour utiliser cette fonctionnalite
-          </p>
-        )}
       </div>
     </div>
   )
