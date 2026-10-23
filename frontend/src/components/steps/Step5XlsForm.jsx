@@ -1,5 +1,4 @@
 import { useState, useRef } from "react"
-import { useStore } from "../../store/useStore"
 import { api } from "../../api/client"
 import {
   FileText,
@@ -14,9 +13,6 @@ import {
 } from "lucide-react"
 
 export default function Step5XlsForm() {
-  const apiKey1 = useStore((s) => s.apiKey1)
-  const apiKey2 = useStore((s) => s.apiKey2)
-
   const [noteCadrageFile, setNoteCadrageFile] = useState(null)
   const [cadreResultatsFile, setCadreResultatsFile] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -25,19 +21,18 @@ export default function Step5XlsForm() {
   const [resultBlob, setResultBlob] = useState(null)
   const [resultFilename, setResultFilename] = useState("")
   const [localApi, setLocalApi] = useState("api1")
+  const [localApiKey, setLocalApiKey] = useState("")
 
   const ncFileRef = useRef(null)
   const crFileRef = useRef(null)
-
-  const currentApiKey = localApi === "api1" ? apiKey1 : apiKey2
 
   const handleGenerate = async () => {
     if (!noteCadrageFile) {
       setError("Veuillez charger la note de cadrage (.docx)")
       return
     }
-    if (!currentApiKey) {
-      setError("Cle API non configuree. Allez dans l'onglet Importer pour la saisir.")
+    if (!localApiKey.trim()) {
+      setError("Veuillez saisir la cle API")
       return
     }
 
@@ -49,7 +44,7 @@ export default function Step5XlsForm() {
     try {
       const { blob, filename } = await api.generateQuestionnaire(
         noteCadrageFile,
-        currentApiKey,
+        localApiKey.trim(),
         localApi,
         cadreResultatsFile
       )
@@ -91,40 +86,38 @@ export default function Step5XlsForm() {
         </div>
       </div>
 
-      {/* Choix API */}
+      {/* Choix API + cle */}
       <div className="bg-white rounded-2xl p-6 shadow-card border border-gray-200">
-        <h3 className="font-sora font-semibold text-navy mb-4">Choix de l'IA</h3>
-        <div className="flex items-center gap-6">
+        <h3 className="font-sora font-semibold text-navy mb-4">Configuration IA</h3>
+        <div className="flex items-center gap-6 mb-4">
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="radio"
               name="step5api"
               checked={localApi === "api1"}
-              onChange={() => setLocalApi("api1")}
+              onChange={() => { setLocalApi("api1"); setLocalApiKey("") }}
               className="w-4 h-4 accent-navy"
             />
-            <span className={`text-sm font-medium ${apiKey1 ? "text-gray-700" : "text-gray-400"}`}>
-              API 1 (Claude) {apiKey1 ? "✓" : "— non configuree"}
-            </span>
+            <span className="text-sm font-medium text-gray-700">API 1 (Claude)</span>
           </label>
           <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="radio"
               name="step5api"
               checked={localApi === "api2"}
-              onChange={() => setLocalApi("api2")}
+              onChange={() => { setLocalApi("api2"); setLocalApiKey("") }}
               className="w-4 h-4 accent-navy"
             />
-            <span className={`text-sm font-medium ${apiKey2 ? "text-gray-700" : "text-gray-400"}`}>
-              API 2 (Groq) {apiKey2 ? "✓" : "— non configuree"}
-            </span>
+            <span className="text-sm font-medium text-gray-700">API 2 (Groq)</span>
           </label>
         </div>
-        {!currentApiKey && (
-          <p className="text-xs text-amber-600 mt-3">
-            Saisissez d'abord la cle API dans l'onglet "Importer"
-          </p>
-        )}
+        <input
+          type="password"
+          placeholder={localApi === "api1" ? "Cle API Claude (sk-ant-...)" : "Cle API Groq (gsk_...)"}
+          value={localApiKey}
+          onChange={(e) => setLocalApiKey(e.target.value)}
+          className="w-full px-4 py-2.5 rounded-xl border border-gray-300 text-sm focus:ring-2 focus:ring-navy/20 focus:border-navy outline-none transition-all"
+        />
       </div>
 
       {/* Upload fichiers */}
@@ -257,9 +250,9 @@ export default function Step5XlsForm() {
 
         <button
           onClick={handleGenerate}
-          disabled={loading || !noteCadrageFile || !currentApiKey}
+          disabled={loading || !noteCadrageFile || !localApiKey.trim()}
           className={`w-full py-3 rounded-xl font-sora font-semibold text-sm flex items-center justify-center gap-2 transition-all ${
-            loading || !noteCadrageFile || !currentApiKey
+            loading || !noteCadrageFile || !localApiKey.trim()
               ? "bg-gray-200 text-gray-400 cursor-not-allowed"
               : "bg-navy hover:bg-navy/90 text-white shadow-lg"
           }`}
