@@ -62,78 +62,120 @@ def generate_questionnaire_data(
 ) -> dict:
     """Appeler l'IA pour générer la structure du questionnaire en JSON."""
 
-    system_prompt = """Tu es un expert en conception de questionnaires d'enquêtes quantitatives pour des projets de développement (HCR, UNICEF, Banque Mondiale, etc.).
+    system_prompt = """Tu es un expert senior en conception de questionnaires d'enquêtes quantitatives pour des projets de développement international (HCR, HCDH, UNICEF, Banque Mondiale, PNUD, PBF).
 
-À partir de la note de cadrage (méthodologie) et du cadre de résultats (matrice des indicateurs) fournis, tu dois concevoir un questionnaire quantitatif complet et professionnel.
+À partir de la note de cadrage et du cadre de résultats fournis, tu conçois un questionnaire quantitatif COMPLET, PROFESSIONNEL et PRÊT POUR LE TERRAIN, conforme aux standards des Nations Unies.
 
-Le questionnaire doit suivre cette structure standard :
+ARCHITECTURE OBLIGATOIRE DU QUESTIONNAIRE :
 
-1. En-tête : titre du projet, type de questionnaire, population cible, zones, version
-2. Instructions générales pour les enquêteurs
-3. Parties numérotées, chacune contenant des questions sous forme de tableau à 5 colonnes :
-   - N° (numérotation hiérarchique : 1.1, 1.2, etc.)
-   - Question (texte complet de la question)
-   - Modalités de réponse (choix numérotés, ou format de réponse)
-   - Filtre / Instruction (consignes pour l'enquêteur, sauts conditionnels)
-   - Indicateur mesuré (code de l'indicateur du cadre de résultats, ou "—")
+PARTIE 0 — IDENTIFICATION (administratif, non lu au répondant) : 8-11 questions
+  ID unique, code enquêteur, sexe enquêteur, date, heure début/fin, ville, moughataa/commune, quartier/grappe, langue d'entretien, GPS.
+  Adapter les listes (villes, moughataas) au contexte géographique du projet.
 
-Les parties obligatoires sont :
-- Partie 0 : Identification (ID questionnaire, enquêteur, date, lieu)
-- Partie 1 : Consentement libre et éclairé
-- Partie 2 : Caractéristiques sociodémographiques
-- Parties 3+ : Sections thématiques basées sur les indicateurs du cadre de résultats
-- Dernière partie : Clôture de l'entretien
+PARTIE 1 — CONSENTEMENT LIBRE ET ÉCLAIRÉ : 3-5 questions
+  Script de consentement COMPLET à lire (qui mandate, objectif, durée, confidentialité, droit de refus, contact réclamation).
+  Consentement obtenu, consentement mineur si applicable, résultat entretien (Complet/Refus/Absent/Interrompu/Remplacement), catégorie répondant, autorisation base de données.
 
-Règles :
-- Chaque indicateur du cadre de résultats doit être couvert par au moins une question
-- Les modalités de réponse doivent être précises et numérotées
-- Ajouter des filtres/sauts logiques quand nécessaire
-- Respecter la sensibilité des sujets (VBG, protection, etc.)
-- Le questionnaire doit être en français
+PARTIE 2 — SOCIODÉMOGRAPHIQUES (tronc commun) : 8-11 questions
+  Sexe (Femme/Homme/Autre), tranche d'âge (18-24, 25-34, 35-44, 45-54, 55-64, 65+), nationalité, statut/groupe, situation matrimoniale, chef de ménage, taille ménage, niveau instruction (Aucun/Coranique/Primaire/Secondaire/Supérieur/Formation pro), difficultés fonctionnelles Washington Group (voir/entendre/marcher/mémoire/soins/communication, échelle 1-4), occupation, source revenu.
 
-Réponds UNIQUEMENT avec un JSON valide (pas de markdown, pas de commentaires) avec cette structure :
+PARTIES 3 à N-3 — THÉMATIQUES : 3-9 questions chacune
+  Identifier les thèmes depuis la note de cadrage et les indicateurs. Pour CHAQUE partie :
+  - Note "Indicateurs mesurés :" avec codes et intitulés
+  - 3-9 questions mesurant ces indicateurs sous différents angles
+  - Varier : échelles Likert 1-5 (AVEC libellé à chaque niveau), choix unique, choix multiples, questions ouvertes
+  - Questions de perception ET de vécu concret
+  - Pour l'éducation : DÉSAGRÉGER par sexe ET par niveau (primaire/secondaire). Créer des sous-sections 5.A (perceptions générales, posées à TOUS) et 5.B (situation scolaire par enfant, par sexe, par niveau)
+  - Pour chaque service/institution à évaluer : lister les items individuellement
+
+MODULES SPÉCIFIQUES PAR SOUS-POPULATION :
+  Si le projet distingue des composantes (ex: A=migrants/réfugiés, B=communauté d'accueil), créer des MODULES SÉPARÉS :
+  - Filtre d'entrée : "Administrer uniquement si Q1.x = valeur"
+  - Questions adaptées au vécu spécifique (durée résidence, documents statut, procédures, satisfaction services)
+  - Module acteurs locaux avec question filtre auto-portée
+
+CLÔTURE : 2-3 questions
+  Question ouverte priorité/besoin, orientation vers service si besoin (protection, VBG, MHPSS), script clôture.
+
+ANNEXE : logique de passage + correspondance questions↔indicateurs.
+
+RÈGLES DE QUALITÉ :
+
+Colonne "Filtre / Instruction" — NE JAMAIS LAISSER VIDE :
+  Sauts conditionnels ("Si Q3.6=2, passer à Q3.9"), instructions lecture ("Lire les options"), type réponse ("Une seule réponse", "Choix multiples"), sensibilité ("Question sensible — rappeler confidentialité"), vérification ("Doit correspondre à Q1.4"), éthique ("Ne jamais recueillir de récit d'incident — protocole OMS"), genre ("Enquêtrice femme pour répondante femme").
+
+Colonne "Indicateur mesuré" :
+  Parties 0,1,2 et Clôture : "—". Parties thématiques : code EXACT ("Produit 1 — P1.Ic (confiance institutionnelle)"). Contextuelle : "Contextuelle — appuie P2.Ic". Données TdR : "Donnée TdR — assiduité scolaire".
+
+Modalités de réponse :
+  TOUJOURS numérotées. Échelles Likert : 5 niveaux AVEC libellé complet (ex: "1=Aucune confiance 2=Faible 3=Moyenne 4=Plutôt confiance 5=Totale"). Inclure "9. NSP" et "8. Préfère ne pas répondre" pour questions sensibles. Numériques : "|___|___|". Texte libre : "Zone de texte libre".
+
+Éthique :
+  VBG jamais par question directe (protocole OMS). Détresse : interrompre et orienter. Mineurs : consentement adulte + assentiment. Revenus/détention : rappel confidentialité.
+
+CONTRAINTES TECHNIQUES :
+  - Viser 60-90 questions au total
+  - Questions COURTES (max 2 lignes), modalités concises mais complètes
+  - JSON total < 10000 mots
+  - Questionnaire en français
+
+FORMAT JSON — Réponds UNIQUEMENT avec un JSON valide :
 {
   "header": {
-    "organization": "Nom de l'organisation",
-    "project_title": "Titre du projet",
-    "questionnaire_type": "Type de questionnaire",
+    "organization": "Nom(s)",
+    "project_title": "Titre complet",
+    "questionnaire_type": "QUESTIONNAIRE QUANTITATIF INDIVIDUEL DE PERCEPTION",
     "target_population": "Population cible",
-    "zones": "Zones géographiques",
+    "zones": "Zones",
     "version": "Version 1"
   },
-  "instructions": ["instruction 1", "instruction 2", ...],
+  "instructions": ["instruction enquêteur 1", "instruction 2", "...au moins 5 instructions"],
   "parts": [
     {
       "number": 0,
       "title": "Identification de l'enquête",
-      "description": "Description optionnelle ou texte introductif",
-      "sub_sections": [],
+      "description": "Administratif — non lu au répondant",
+      "sub_sections": [
+        {"title": "Sous-section optionnelle", "description": "", "questions": []}
+      ],
       "questions": [
         {
           "number": "0.1",
           "question": "Texte de la question",
-          "modalities": "1. Option A  2. Option B  3. Option C",
-          "filter": "Instruction pour l'enquêteur ou —",
-          "indicator": "Code indicateur ou —"
+          "modalities": "1. Option A  2. Option B",
+          "filter": "Instruction enquêteur obligatoire",
+          "indicator": "— ou code indicateur"
         }
       ]
     }
   ],
-  "closure_script": "Texte de clôture de l'entretien",
+  "closure_script": "Script complet de clôture",
+  "passage_logic": [
+    {"block": "Parties 0-4", "condition": "Tous les répondants", "description": "Tronc commun"}
+  ],
   "indicator_mapping": [
-    {"indicator_code": "Ind.1a", "questions": ["3.1", "3.2"]}
+    {"indicator_code": "Ind.1", "indicator_label": "Intitulé", "questions": ["3.1", "3.2"]}
   ]
 }"""
 
-    user_prompt = f"""Voici les documents d'entrée :
+    user_prompt = f"""Voici les documents pour concevoir le questionnaire :
 
-=== NOTE DE CADRAGE (MÉTHODOLOGIE) ===
-{note_cadrage_text[:12000]}
+=== NOTE DE CADRAGE ===
+{note_cadrage_text[:14000]}
 
-=== CADRE DE RÉSULTATS (MATRICE DES INDICATEURS) ===
+=== CADRE DE RÉSULTATS ===
 {cadre_resultats_text[:8000]}
 
-Génère le questionnaire complet en JSON selon le format demandé."""
+CONSIGNES FINALES :
+- 60-90 questions au total, réparties selon l'architecture obligatoire
+- Parties thématiques : 3-9 questions chacune, couvrant chaque indicateur du cadre de résultats
+- Si le document mentionne des composantes/sous-populations distinctes, créer des modules séparés avec filtres d'entrée
+- Éducation : désagréger garçons/filles × primaire/secondaire (sous-sections 5.A perceptions + 5.B situation scolaire)
+- CHAQUE question a une instruction enquêteur (colonne Filtre) — jamais vide
+- CHAQUE question thématique a un code indicateur (colonne Indicateur) — jamais vide
+- Inclure la logique de passage et le mapping indicateurs en annexe
+- JSON UNIQUEMENT, pas de texte autour."""
+
 
     api_config = ai_agent.API_CONFIG.get(api, ai_agent.API_CONFIG["api1"])
     model = api_config["model_smart"]
@@ -144,20 +186,76 @@ Génère le questionnaire complet en JSON selon le format demandé."""
         model=model,
         system_prompt=system_prompt,
         user_prompt=user_prompt,
-        max_tokens=8000,
+        max_tokens=16000,
     )
 
     response_text = response_raw["text"]
-    # Extraire le JSON
+    # Extraire le JSON — avec réparation si tronqué
     data = ai_agent._extract_json(response_text)
+    if not data:
+        # Tenter de réparer un JSON tronqué (réponse coupée par max_tokens)
+        data = _repair_truncated_json(response_text)
     if not data:
         raise ValueError("L'IA n'a pas retourné un JSON valide pour le questionnaire.")
     return data
 
 
+def _repair_truncated_json(text: str) -> dict:
+    """Tenter de réparer un JSON tronqué par la limite de tokens."""
+    import json
+    # Trouver le début du JSON
+    start = text.find("{")
+    if start < 0:
+        return None
+    
+    fragment = text[start:]
+    
+    # Essayer tel quel
+    try:
+        return json.loads(fragment)
+    except json.JSONDecodeError:
+        pass
+    
+    # Couper au dernier } ou ] valide, puis fermer les structures
+    # On cherche en reculant depuis la fin
+    best = None
+    for end_pos in range(len(fragment), max(0, len(fragment) - 5000), -1):
+        sub = fragment[:end_pos].rstrip()
+        # Retirer virgule ou deux-points trailing
+        while sub and sub[-1] in (",", ":", "\x22"):
+            sub = sub[:-1].rstrip()
+        
+        ob = sub.count("{") - sub.count("}")
+        oq = sub.count("[") - sub.count("]")
+        
+        if ob < 0 or oq < 0:
+            continue
+        
+        closing = "]" * oq + "}" * ob
+        try:
+            candidate = json.loads(sub + closing)
+            if isinstance(candidate, dict) and "parts" in candidate:
+                return candidate
+            if best is None:
+                best = candidate
+        except json.JSONDecodeError:
+            continue
+    
+    return best
+
+
 def build_questionnaire_docx(data: dict) -> bytes:
     """Construire le fichier .docx du questionnaire à partir du JSON structuré."""
     doc = Document()
+
+    # -- Format paysage pour plus de largeur --
+    for section in doc.sections:
+        section.orientation = 1  # WD_ORIENT.LANDSCAPE
+        new_width, new_height = section.page_height, section.page_width
+        section.page_width = new_width
+        section.page_height = new_height
+        section.left_margin = Cm(1.5)
+        section.right_margin = Cm(1.5)
 
     # -- Styles de base --
     style = doc.styles["Normal"]
@@ -313,7 +411,7 @@ def _add_questions_table(doc, questions, navy, white):
                     run.font.size = Pt(9)
 
     # Largeurs approximatives
-    widths = [Cm(1.2), Cm(5.5), Cm(4.5), Cm(3.5), Cm(2.3)]
+    widths = [Cm(1.5), Cm(7.0), Cm(6.5), Cm(5.5), Cm(3.0)]
     for row in table.rows:
         for i, cell in enumerate(row.cells):
             cell.width = widths[i]
