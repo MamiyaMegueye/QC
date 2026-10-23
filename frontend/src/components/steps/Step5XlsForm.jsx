@@ -18,26 +18,26 @@ export default function Step5XlsForm() {
   const apiKey2 = useStore((s) => s.apiKey2)
   const selectedApi = useStore((s) => s.selectedApi)
 
-  const [questionnaireFile, setQuestionnaireFile] = useState(null)
-  const [contextFile, setContextFile] = useState(null)
+  const [noteCadrageFile, setNoteCadrageFile] = useState(null)
+  const [cadreResultatsFile, setCadreResultatsFile] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState(false)
   const [resultBlob, setResultBlob] = useState(null)
   const [resultFilename, setResultFilename] = useState("")
 
-  const qFileRef = useRef(null)
-  const cFileRef = useRef(null)
+  const ncFileRef = useRef(null)
+  const crFileRef = useRef(null)
 
   const currentApiKey = selectedApi === "api1" ? apiKey1 : apiKey2
 
   const handleGenerate = async () => {
-    if (!questionnaireFile) {
-      setError("Veuillez charger un questionnaire (.docx)")
+    if (!noteCadrageFile) {
+      setError("Veuillez charger la note de cadrage (.docx)")
       return
     }
     if (!currentApiKey) {
-      setError("Veuillez configurer une cle API dans l'etape 1")
+      setError("Veuillez configurer une cle API dans l'etape Importer")
       return
     }
 
@@ -47,11 +47,11 @@ export default function Step5XlsForm() {
     setResultBlob(null)
 
     try {
-      const { blob, filename } = await api.generateXlsform(
-        questionnaireFile,
+      const { blob, filename } = await api.generateQuestionnaire(
+        noteCadrageFile,
         currentApiKey,
         selectedApi,
-        contextFile
+        cadreResultatsFile
       )
       setResultBlob(blob)
       setResultFilename(filename)
@@ -75,7 +75,6 @@ export default function Step5XlsForm() {
 
   return (
     <div className="space-y-5 slide-up">
-      {/* Titre */}
       <div className="bg-white rounded-2xl p-6 shadow-card border border-gray-200">
         <div className="flex items-center gap-3 mb-2">
           <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center">
@@ -83,29 +82,31 @@ export default function Step5XlsForm() {
           </div>
           <div>
             <h2 className="text-lg font-sora font-bold text-navy">
-              Generateur XLSForm
+              Generateur de questionnaire
             </h2>
             <p className="text-sm text-gray-500">
-              Convertissez un questionnaire Word en formulaire KoboToolbox / ODK
+              L'IA elabore un questionnaire structure a partir de la note de cadrage et du cadre de resultats
             </p>
           </div>
         </div>
       </div>
 
-      {/* Upload questionnaire */}
       <div className="bg-white rounded-2xl p-6 shadow-card border border-gray-200">
         <h3 className="font-sora font-semibold text-navy mb-4">
-          1. Questionnaire (obligatoire)
+          1. Note de cadrage (obligatoire)
         </h3>
+        <p className="text-xs text-gray-400 mb-3">
+          Document de methodologie de l'enquete (.docx)
+        </p>
 
-        {!questionnaireFile ? (
+        {!noteCadrageFile ? (
           <button
-            onClick={() => qFileRef.current?.click()}
+            onClick={() => ncFileRef.current?.click()}
             className="w-full border-2 border-dashed border-gray-300 rounded-xl p-8 flex flex-col items-center gap-3 hover:border-purple-400 hover:bg-purple-50/30 transition-colors cursor-pointer"
           >
             <Upload className="w-8 h-8 text-gray-400" />
             <span className="text-sm text-gray-500">
-              Cliquez pour charger le questionnaire{" "}
+              Cliquez pour charger la note de cadrage{" "}
               <span className="font-semibold text-purple-600">.docx</span>
             </span>
           </button>
@@ -114,15 +115,15 @@ export default function Step5XlsForm() {
             <div className="flex items-center gap-3">
               <FileText className="w-5 h-5 text-purple-600" />
               <span className="text-sm font-medium text-purple-900">
-                {questionnaireFile.name}
+                {noteCadrageFile.name}
               </span>
               <span className="text-xs text-gray-400">
-                ({(questionnaireFile.size / 1024).toFixed(0)} Ko)
+                ({(noteCadrageFile.size / 1024).toFixed(0)} Ko)
               </span>
             </div>
             <button
               onClick={() => {
-                setQuestionnaireFile(null)
+                setNoteCadrageFile(null)
                 setSuccess(false)
                 setResultBlob(null)
               }}
@@ -134,45 +135,43 @@ export default function Step5XlsForm() {
         )}
 
         <input
-          ref={qFileRef}
+          ref={ncFileRef}
           type="file"
           accept=".docx,.doc"
           className="hidden"
           onChange={(e) => {
-            setQuestionnaireFile(e.target.files[0] || null)
+            setNoteCadrageFile(e.target.files[0] || null)
             setSuccess(false)
             setResultBlob(null)
             setError("")
           }}
         />
 
-        {/* Contexte optionnel */}
         <h3 className="font-sora font-semibold text-navy mt-6 mb-3">
-          2. Document de contexte (optionnel)
+          2. Cadre de resultats / cadre logique (optionnel)
         </h3>
         <p className="text-xs text-gray-400 mb-3">
-          Note de cadrage, cadre logique ou cadre de resultats — ameliore la
-          qualite de la generation
+          Matrice des indicateurs — ameliore la couverture des indicateurs dans le questionnaire
         </p>
 
-        {!contextFile ? (
+        {!cadreResultatsFile ? (
           <button
-            onClick={() => cFileRef.current?.click()}
+            onClick={() => crFileRef.current?.click()}
             className="flex items-center gap-2 text-sm text-purple-600 hover:text-purple-800 transition-colors"
           >
             <Plus className="w-4 h-4" />
-            Ajouter un document de contexte
+            Ajouter le cadre de resultats
           </button>
         ) : (
           <div className="flex items-center justify-between bg-gray-50 rounded-xl p-3">
             <div className="flex items-center gap-3">
               <FileText className="w-4 h-4 text-gray-500" />
               <span className="text-sm text-gray-700">
-                {contextFile.name}
+                {cadreResultatsFile.name}
               </span>
             </div>
             <button
-              onClick={() => setContextFile(null)}
+              onClick={() => setCadreResultatsFile(null)}
               className="text-gray-400 hover:text-red-500"
             >
               <X className="w-4 h-4" />
@@ -181,15 +180,14 @@ export default function Step5XlsForm() {
         )}
 
         <input
-          ref={cFileRef}
+          ref={crFileRef}
           type="file"
           accept=".docx,.doc,.xlsx,.xls,.txt"
           className="hidden"
-          onChange={(e) => setContextFile(e.target.files[0] || null)}
+          onChange={(e) => setCadreResultatsFile(e.target.files[0] || null)}
         />
       </div>
 
-      {/* Bouton generer */}
       <div className="bg-white rounded-2xl p-6 shadow-card border border-gray-200">
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4 flex items-start gap-2">
@@ -204,7 +202,7 @@ export default function Step5XlsForm() {
               <CheckCircle2 className="w-5 h-5 text-green-600" />
               <div>
                 <p className="text-sm font-semibold text-green-800">
-                  XLSForm genere avec succes !
+                  Questionnaire genere avec succes !
                 </p>
                 <p className="text-xs text-green-600">{resultFilename}</p>
               </div>
@@ -214,16 +212,16 @@ export default function Step5XlsForm() {
               className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors"
             >
               <Download className="w-4 h-4" />
-              Telecharger
+              Telecharger .docx
             </button>
           </div>
         )}
 
         <button
           onClick={handleGenerate}
-          disabled={loading || !questionnaireFile || !currentApiKey}
+          disabled={loading || !noteCadrageFile || !currentApiKey}
           className={`w-full py-3 rounded-xl font-sora font-semibold text-sm flex items-center justify-center gap-2 transition-all ${
-            loading || !questionnaireFile || !currentApiKey
+            loading || !noteCadrageFile || !currentApiKey
               ? "bg-gray-200 text-gray-400 cursor-not-allowed"
               : "bg-navy hover:bg-navy/90 text-white shadow-lg"
           }`}
@@ -236,15 +234,14 @@ export default function Step5XlsForm() {
           ) : (
             <>
               <FileSpreadsheet className="w-5 h-5" />
-              Generer le XLSForm
+              Generer le questionnaire
             </>
           )}
         </button>
 
         {!currentApiKey && (
           <p className="text-xs text-amber-600 mt-2 text-center">
-            Configurez une cle API dans l'etape "Importer" pour utiliser cette
-            fonctionnalite
+            Configurez une cle API dans l'etape "Importer" pour utiliser cette fonctionnalite
           </p>
         )}
       </div>

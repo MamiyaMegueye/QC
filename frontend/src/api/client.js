@@ -328,13 +328,13 @@ export const api = {
   },
 
   // --- XLSForm Generator ---
-  async generateXlsform(questionnaireFile, apiKey, api = 'api1', contextFile = null) {
+  async generateQuestionnaire(noteCadrageFile, apiKey, api = 'api1', cadreResultatsFile = null) {
     const formData = new FormData()
-    formData.append('questionnaire', questionnaireFile)
+    formData.append('note_cadrage', noteCadrageFile)
     formData.append('api_key', apiKey)
     formData.append('api', api)
-    if (contextFile) {
-      formData.append('context_file', contextFile)
+    if (cadreResultatsFile) {
+      formData.append('cadre_resultats', cadreResultatsFile)
     }
 
     const res = await fetch(API_URL + '/api/generate-xlsform', {
@@ -354,7 +354,7 @@ export const api = {
 
     const cd = res.headers.get('content-disposition') || ''
     const fnMatch = cd.match(/filename="([^"]+)"/)
-    const filename = fnMatch ? fnMatch[1] : 'questionnaire_XLSForm.xlsx'
+    const filename = fnMatch ? fnMatch[1] : 'Questionnaire.docx'
     const blob = await res.blob()
     return { blob, filename }
   },
