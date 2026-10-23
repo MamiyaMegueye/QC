@@ -43,8 +43,8 @@ API_CONFIG = {
         "key_prefix":  "sk-ant-",
     },
     "api2": {
-        "model_fast":  "llama-3.1-8b-instant",
-        "model_smart": "llama-3.3-70b-versatile",
+        "model_fast":  "openai/gpt-oss-20b",
+        "model_smart": "openai/gpt-oss-120b",
         "key_prefix":  "gsk_",
     },
 }
