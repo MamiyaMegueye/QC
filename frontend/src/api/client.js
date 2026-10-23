@@ -337,9 +337,8 @@ export const api = {
       formData.append('cadre_resultats', cadreResultatsFile)
     }
 
-    const res = await fetch(API_URL + '/api/generate-xlsform', {
+    const res = await authFetch(API_URL + '/api/generate-xlsform', {
       method: 'POST',
-      headers: getAuthHeaders(),
       body: formData,
     })
 
