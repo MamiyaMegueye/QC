@@ -142,8 +142,8 @@ Génère le questionnaire complet en JSON selon le format demandé."""
         api_key=api_key,
         api=api,
         model=model,
-        system=system_prompt,
-        user_content=user_prompt,
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
         max_tokens=8000,
     )
 
