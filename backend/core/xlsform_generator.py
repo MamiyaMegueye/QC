@@ -325,7 +325,7 @@ def _shade_cell(cell, color: RGBColor):
     shd = shading.makeelement(qn("w:shd"), {
         qn("w:val"): "clear",
         qn("w:color"): "auto",
-        qn("w:fill"): f"{color.red:02X}{color.green:02X}{color.blue:02X}",
+        qn("w:fill"): str(color).replace("#", ""),
     })
     # Supprimer l'ancien shading s'il existe
     for old in shading.findall(qn("w:shd")):
