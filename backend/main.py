@@ -1118,7 +1118,7 @@ async def generate_questionnaire(
     note_cadrage: UploadFile = File(...),
     cadre_resultats: UploadFile = File(None),
     api: str = Form("api1"),
-    api_key: str = Form(...),
+    api_key: str = Form(""),
 ):
     """
     Recoit une note de cadrage (.docx) et un cadre de resultats (.xlsx/.docx),
@@ -1149,7 +1149,7 @@ async def generate_questionnaire(
         questionnaire_data = generate_questionnaire_data(
             note_cadrage_text=note_text[:12000],
             cadre_resultats_text=cadre_text[:8000],
-            api_key=api_key,
+            api_key=_resolve_api_key(api, api_key),
             api=api,
         )
     except Exception as e:
