@@ -9,6 +9,7 @@ import Step1Import from "./components/steps/Step1Import"
 import Step2Detect from "./components/steps/Step2Detect"
 import Step3Report from "./components/steps/Step3Report"
 import Step4AnalyticalReport from "./components/steps/Step4AnalyticalReport"
+import Step5XlsForm from "./components/steps/Step5XlsForm"
 import { AlertCircle } from "lucide-react"
 
 export default function App() {
@@ -56,6 +57,7 @@ export default function App() {
         {currentStep === 2 && <Step2Detect />}
         {currentStep === 3 && <Step3Report />}
         {currentStep === 4 && <Step4AnalyticalReport />}
+        {currentStep === 5 && <Step5XlsForm />}
       </div>
     </div>
   )

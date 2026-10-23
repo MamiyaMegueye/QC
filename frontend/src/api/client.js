@@ -326,4 +326,36 @@ export const api = {
     const blob = await res.blob()
     return { blob, filename }
   },
+
+  // --- XLSForm Generator ---
+  async generateXlsform(questionnaireFile, apiKey, api = 'api1', contextFile = null) {
+    const formData = new FormData()
+    formData.append('questionnaire', questionnaireFile)
+    formData.append('api_key', apiKey)
+    formData.append('api', api)
+    if (contextFile) {
+      formData.append('context_file', contextFile)
+    }
+
+    const res = await fetch(API_URL + '/api/generate-xlsform', {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: formData,
+    })
+
+    if (!res.ok) {
+      let msg = 'Erreur ' + res.status
+      try {
+        const data = await res.json()
+        msg = data.detail || msg
+      } catch {}
+      throw new Error(msg)
+    }
+
+    const cd = res.headers.get('content-disposition') || ''
+    const fnMatch = cd.match(/filename="([^"]+)"/)
+    const filename = fnMatch ? fnMatch[1] : 'questionnaire_XLSForm.xlsx'
+    const blob = await res.blob()
+    return { blob, filename }
+  },
 }

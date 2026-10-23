@@ -7,6 +7,7 @@ const STEPS = [
   // Renommage demande par SISTA v2 : "Rapport QC" -> "Bilan par enqueteur"
   { num: 3, label: "Bilan par enquêteur" },
   { num: 4, label: "Rapport analytique" },
+  { num: 5, label: "XLSForm" },
 ]
 
 export default function Stepper() {

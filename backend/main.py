@@ -1108,3 +1108,74 @@ def delete_session(session_id: str):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=False)
+
+# ===================================================================
+#  ENDPOINT : Generation XLSForm a partir d'un questionnaire Word
+# ===================================================================
+
+@app.post("/api/generate-xlsform")
+async def generate_xlsform(
+    questionnaire: UploadFile = File(...),
+    context_file: UploadFile = File(None),
+    api: str = Form("api1"),
+    api_key: str = Form(...),
+):
+    """
+    Recoit un questionnaire .docx, optionnellement un fichier de contexte,
+    et genere un fichier XLSForm (.xlsx) compatible KoboToolbox/ODK.
+    """
+    from core.xlsform_generator import (
+        extract_questionnaire_content,
+        generate_xlsform_data,
+        build_xlsform_excel,
+    )
+
+    # Validation du fichier
+    if not questionnaire.filename.lower().endswith((".docx", ".doc")):
+        raise HTTPException(400, "Le fichier doit etre un document Word (.docx)")
+
+    q_bytes = await questionnaire.read()
+
+    # Contexte optionnel (note de cadrage, cadre logique)
+    context_text = ""
+    if context_file and context_file.filename:
+        ctx_bytes = await context_file.read()
+        fname = context_file.filename.lower()
+        if fname.endswith(".docx"):
+            context_text = extract_questionnaire_content(ctx_bytes)
+        elif fname.endswith((".xlsx", ".xls")):
+            import openpyxl
+            wb = openpyxl.load_workbook(io.BytesIO(ctx_bytes))
+            parts = []
+            for ws in wb.worksheets:
+                parts.append(f"--- Feuille: {ws.title} ---")
+                for row in ws.iter_rows(values_only=True):
+                    vals = [str(v) if v else "" for v in row]
+                    parts.append("\t".join(vals))
+            context_text = "\n".join(parts)
+        elif fname.endswith(".txt"):
+            context_text = ctx_bytes.decode("utf-8", errors="ignore")
+
+    # Generation
+    try:
+        xlsform_data = generate_xlsform_data(
+            questionnaire_bytes=q_bytes,
+            api_key=api_key,
+            api=api,
+            context_text=context_text[:20000] if context_text else "",
+        )
+    except Exception as e:
+        raise HTTPException(500, f"Erreur lors de la generation : {str(e)}")
+
+    # Construction Excel
+    xlsx_bytes = build_xlsform_excel(xlsform_data)
+
+    # Retourner le fichier
+    base_name = questionnaire.filename.rsplit(".", 1)[0]
+    output_name = f"{base_name}_XLSForm.xlsx"
+
+    return StreamingResponse(
+        io.BytesIO(xlsx_bytes),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{output_name}"'},
+    )
