@@ -15,7 +15,6 @@ import {
 
 export default function Step5XlsForm() {
   const apiKey1 = useStore((s) => s.apiKey1)
-  const apiKey2 = useStore((s) => s.apiKey2)
 
   const [noteCadrageFile, setNoteCadrageFile] = useState(null)
   const [cadreResultatsFile, setCadreResultatsFile] = useState(null)
@@ -24,13 +23,11 @@ export default function Step5XlsForm() {
   const [success, setSuccess] = useState(false)
   const [resultBlob, setResultBlob] = useState(null)
   const [resultFilename, setResultFilename] = useState("")
-  const [localApi, setLocalApi] = useState("api1")
+  const [elapsed, setElapsed] = useState(0)
 
   const ncFileRef = useRef(null)
   const crFileRef = useRef(null)
-
-  // Use store key if available, otherwise send empty and backend uses env var
-  const currentApiKey = localApi === "api1" ? (apiKey1 || "") : (apiKey2 || "")
+  const timerRef = useRef(null)
 
   const handleGenerate = async () => {
     if (!noteCadrageFile) {
@@ -42,12 +39,19 @@ export default function Step5XlsForm() {
     setError("")
     setSuccess(false)
     setResultBlob(null)
+    setElapsed(0)
+
+    // Timer pour afficher le temps écoulé
+    const startTime = Date.now()
+    timerRef.current = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startTime) / 1000))
+    }, 1000)
 
     try {
       const { blob, filename } = await api.generateQuestionnaire(
         noteCadrageFile,
-        currentApiKey,
-        localApi,
+        apiKey1 || "",
+        "api1",
         cadreResultatsFile
       )
       setResultBlob(blob)
@@ -57,6 +61,7 @@ export default function Step5XlsForm() {
       setError(e.message || "Erreur lors de la generation")
     } finally {
       setLoading(false)
+      clearInterval(timerRef.current)
     }
   }
 
@@ -68,6 +73,12 @@ export default function Step5XlsForm() {
     a.download = resultFilename
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  const formatTime = (s) => {
+    const m = Math.floor(s / 60)
+    const sec = s % 60
+    return m > 0 ? `${m}m ${sec}s` : `${sec}s`
   }
 
   return (
@@ -85,33 +96,6 @@ export default function Step5XlsForm() {
               L'IA elabore un questionnaire structure a partir de la note de cadrage et du cadre de resultats
             </p>
           </div>
-        </div>
-      </div>
-
-      {/* Choix API - toujours cliquable, le backend utilise les env vars */}
-      <div className="bg-white rounded-2xl p-6 shadow-card border border-gray-200">
-        <h3 className="font-sora font-semibold text-navy mb-4">Choix de l'IA</h3>
-        <div className="flex items-center gap-6">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="radio"
-              name="step5api"
-              checked={localApi === "api1"}
-              onChange={() => setLocalApi("api1")}
-              className="w-4 h-4 accent-navy"
-            />
-            <span className="text-sm font-medium text-gray-700">API 1 (Claude)</span>
-          </label>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="radio"
-              name="step5api"
-              checked={localApi === "api2"}
-              onChange={() => setLocalApi("api2")}
-              className="w-4 h-4 accent-navy"
-            />
-            <span className="text-sm font-medium text-gray-700">API 2 (Groq)</span>
-          </label>
         </div>
       </div>
 
@@ -255,7 +239,7 @@ export default function Step5XlsForm() {
           {loading ? (
             <>
               <Loader2 className="w-5 h-5 animate-spin" />
-              Generation en cours... (peut prendre 30-60s)
+              Generation en cours... {formatTime(elapsed)}
             </>
           ) : (
             <>
