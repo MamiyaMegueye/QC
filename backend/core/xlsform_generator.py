@@ -138,7 +138,7 @@ Génère le questionnaire complet en JSON selon le format demandé."""
     api_config = ai_agent.API_CONFIG.get(api, ai_agent.API_CONFIG["api1"])
     model = api_config["model_smart"]
 
-    response_text = ai_agent._call_with_retry(
+    response_raw = ai_agent._call_with_retry(
         api_key=api_key,
         api=api,
         model=model,
@@ -147,6 +147,7 @@ Génère le questionnaire complet en JSON selon le format demandé."""
         max_tokens=8000,
     )
 
+    response_text = response_raw["text"]
     # Extraire le JSON
     data = ai_agent._extract_json(response_text)
     if not data:
