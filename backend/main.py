@@ -1156,7 +1156,10 @@ async def generate_questionnaire(
         raise HTTPException(500, f"Erreur lors de la generation : {str(e)}")
 
     # Construction du .docx
-    docx_bytes = build_questionnaire_docx(questionnaire_data)
+    try:
+        docx_bytes = build_questionnaire_docx(questionnaire_data)
+    except Exception as e:
+        raise HTTPException(500, f"Erreur construction docx : {str(e)}")
 
     base_name = note_cadrage.filename.rsplit(".", 1)[0]
     output_name = f"Questionnaire_{base_name}.docx"
