@@ -16,6 +16,17 @@ export default {
           light: "#F3D44E",
         },
         beige: "#F4F7FA",
+        // Nouvelles couleurs accent
+        accent: {
+          violet: "#7C3AED",
+          "violet-light": "#EDE9FE",
+          teal: "#0D9488",
+          "teal-light": "#CCFBF1",
+          coral: "#F43F5E",
+          "coral-light": "#FFE4E6",
+          sky: "#0EA5E9",
+          "sky-light": "#E0F2FE",
+        },
       },
       fontFamily: {
         sora: ["Sora", "sans-serif"],
@@ -25,11 +36,16 @@ export default {
       boxShadow: {
         soft: "0 2px 14px rgba(13,27,44,0.06)",
         card: "0 2px 10px rgba(13,27,44,0.05)",
+        "card-hover": "0 8px 25px rgba(13,27,44,0.10)",
         header: "0 8px 24px rgba(13,27,44,0.18)",
+        glow: "0 0 20px rgba(124,58,237,0.15)",
+        "glow-gold": "0 0 20px rgba(239,199,26,0.20)",
       },
       animation: {
         "fade-in": "fadeIn 0.3s ease-in-out",
         "slide-up": "slideUp 0.4s ease-out",
+        "gradient-shift": "gradientShift 8s ease infinite",
+        "pulse-soft": "pulseSoft 3s ease-in-out infinite",
       },
       keyframes: {
         fadeIn: {
@@ -39,6 +55,14 @@ export default {
         slideUp: {
           "0%": { opacity: 0, transform: "translateY(8px)" },
           "100%": { opacity: 1, transform: "translateY(0)" },
+        },
+        gradientShift: {
+          "0%, 100%": { backgroundPosition: "0% 50%" },
+          "50%": { backgroundPosition: "100% 50%" },
+        },
+        pulseSoft: {
+          "0%, 100%": { opacity: 1 },
+          "50%": { opacity: 0.7 },
         },
       },
     },

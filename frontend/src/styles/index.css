@@ -4,16 +4,26 @@
 
 @layer base {
   html, body {
-    @apply font-spline bg-beige text-navy antialiased;
+    @apply font-spline text-navy antialiased;
+    background: linear-gradient(135deg, #F4F7FA 0%, #EDE9FE 30%, #E0F2FE 60%, #F4F7FA 100%);
+    background-size: 300% 300%;
+    animation: bgShift 12s ease infinite;
+    min-height: 100vh;
   }
   h1, h2, h3, h4, h5, h6 {
     @apply font-sora;
   }
 }
 
+@keyframes bgShift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
 @layer components {
   .card {
-    @apply bg-white rounded-2xl p-7 shadow-soft border border-gray-200;
+    @apply bg-white/80 backdrop-blur-sm rounded-2xl p-7 shadow-soft border border-gray-200/60
+           transition-all duration-300 hover:shadow-card-hover;
   }
   .card-title {
     @apply text-navy font-sora font-bold text-xl mb-2;
@@ -24,23 +34,23 @@
 
   /* Boutons */
   .btn-primary {
-    @apply bg-navy text-white font-sora font-semibold px-6 py-3 rounded-xl
-           transition-all hover:bg-navy-deep hover:text-gold disabled:opacity-50
-           disabled:cursor-not-allowed;
+    @apply bg-gradient-to-r from-navy to-navy-light text-white font-sora font-semibold px-6 py-3 rounded-xl
+           transition-all duration-300 hover:from-navy-deep hover:to-navy hover:shadow-glow
+           hover:text-gold disabled:opacity-50 disabled:cursor-not-allowed;
   }
   .btn-secondary {
     @apply bg-white border border-gray-300 text-navy font-sora font-semibold
-           px-5 py-2.5 rounded-xl transition-all hover:bg-gray-50;
+           px-5 py-2.5 rounded-xl transition-all duration-200 hover:bg-gray-50 hover:border-accent-violet/30;
   }
   .btn-success {
-    @apply bg-green-500 text-white font-sora font-semibold px-6 py-3 rounded-xl
-           transition-all hover:bg-green-600 disabled:opacity-50;
+    @apply bg-gradient-to-r from-accent-teal to-green-500 text-white font-sora font-semibold px-6 py-3 rounded-xl
+           transition-all duration-300 hover:shadow-lg disabled:opacity-50;
   }
 
   /* Inputs */
   .input-field {
     @apply w-full bg-white border-2 border-gray-200 rounded-xl px-4 py-2.5
-           text-navy text-sm transition-colors focus:border-navy focus:outline-none;
+           text-navy text-sm transition-all duration-200 focus:border-accent-violet focus:ring-2 focus:ring-accent-violet/10 focus:outline-none;
   }
   .label-text {
     @apply font-sora font-semibold text-sm text-navy mb-1.5 block;
@@ -86,22 +96,22 @@
   .divider-fancy::after {
     content: '';
     @apply flex-1 h-0.5 rounded-full opacity-60;
-    background: linear-gradient(90deg, transparent 0%, #EFC71A 30%, #13263D 60%, #8B5CF6 100%);
+    background: linear-gradient(90deg, transparent 0%, #7C3AED 30%, #0D9488 60%, #EFC71A 100%);
   }
 }
 
 /* Scrollbar custom */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: #F4F7FA;
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #13263D;
-  border-radius: 5px;
+  background: linear-gradient(180deg, #7C3AED, #13263D);
+  border-radius: 10px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #0D1B2C;
+  background: linear-gradient(180deg, #6D28D9, #0D1B2C);
 }
