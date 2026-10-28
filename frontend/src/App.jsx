@@ -7,8 +7,8 @@ import Stepper from "./components/Stepper"
 import InfoBanner from "./components/InfoBanner"
 import Step1Questionnaire from "./components/steps/Step1Questionnaire"
 import Step2Collecte from "./components/steps/Step2Collecte"
+import BackCheckPanel from "./components/BackCheckPanel"
 import Step3Report from "./components/steps/Step3Report"
-import Step4AnalyticalReport from "./components/steps/Step4AnalyticalReport"
 import { AlertCircle } from "lucide-react"
 
 export default function App() {
@@ -54,8 +54,8 @@ export default function App() {
 
         {currentStep === 1 && <Step1Questionnaire />}
         {currentStep === 2 && <Step2Collecte />}
-        {currentStep === 3 && <Step3Report />}
-        {currentStep === 4 && <Step4AnalyticalReport />}
+        {currentStep === 3 && <BackCheckPanel />}
+        {currentStep === 4 && <Step3Report />}
       </div>
     </div>
   )

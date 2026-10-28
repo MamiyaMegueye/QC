@@ -23,7 +23,7 @@ const SEVERITY_LABEL = (s) => SEVERITY_COLORS[s]?.label || s
 //  Composant principal
 // ============================================================
 
-export default function BackCheckPanel({ onClose }) {
+export default function BackCheckPanel() {
   const [currentStep, setCurrentStep] = useState(1)
 
   // Etape 1 : fichiers
@@ -227,8 +227,8 @@ export default function BackCheckPanel({ onClose }) {
 
   // Rendu principal
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 slide-up">
-      <div className="bg-white rounded-3xl w-full max-w-6xl max-h-[95vh] overflow-hidden shadow-2xl flex flex-col">
+    <div className="slide-up">
+      <div className="bg-white rounded-2xl w-full overflow-hidden shadow-card border border-gray-200 flex flex-col">
         {/* Header */}
         <div className="bg-navy text-white p-5 flex items-center gap-3 flex-shrink-0">
           <div className="bg-gold rounded-full w-10 h-10 flex items-center justify-center">
@@ -242,9 +242,6 @@ export default function BackCheckPanel({ onClose }) {
               {currentStep === 3 && "Étape 3 sur 3 — Résultats"}
             </p>
           </div>
-          <button onClick={onClose} className="text-white hover:bg-white/10 rounded-lg p-2">
-            <X className="w-5 h-5" />
-          </button>
         </div>
 
         {/* Steps indicator */}
@@ -631,10 +628,10 @@ export default function BackCheckPanel({ onClose }) {
                   Modifier la configuration
                 </button>
                 <button
-                  onClick={onClose}
+                  onClick={() => { setCurrentStep(1); setMainFile(null); setBcFile(null); setResult(null); setPreview(null); }}
                   className="bg-navy text-white px-5 py-2.5 rounded-xl font-bold hover:bg-navy-deep"
                 >
-                  Fermer
+                  Recommencer
                 </button>
               </div>
             </div>
