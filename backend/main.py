@@ -36,7 +36,7 @@ import gzip
 from typing import Optional
 
 import pandas as pd
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
 from starlette.background import BackgroundTask
@@ -1257,7 +1257,7 @@ Réponds UNIQUEMENT en JSON valide avec cette structure :
         if not key:
             raise HTTPException(400, "Clé API manquante. Configurez une clé dans les paramètres.")
 
-        from backend.core.ai_agent import _call_llm
+        from core.ai_agent import _call_llm
         result = _call_llm(
             api=api,
             api_key=key,
@@ -1395,7 +1395,7 @@ Règles :
         if not key:
             raise HTTPException(400, "Clé API manquante.")
 
-        from backend.core.ai_agent import _call_llm
+        from core.ai_agent import _call_llm
         result = _call_llm(
             api=api, api_key=key,
             model="claude-sonnet-4-20250514" if api == "api1" else "llama-3.1-70b-versatile",
@@ -1570,7 +1570,7 @@ Réponds UNIQUEMENT en JSON valide :
         if not key:
             raise HTTPException(400, "Clé API manquante.")
 
-        from backend.core.ai_agent import _call_llm
+        from core.ai_agent import _call_llm
         result = _call_llm(
             api=api, api_key=key,
             model="claude-sonnet-4-20250514" if api == "api1" else "llama-3.1-70b-versatile",
