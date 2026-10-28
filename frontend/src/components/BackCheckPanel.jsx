@@ -628,7 +628,7 @@ export default function BackCheckPanel() {
                   Modifier la configuration
                 </button>
                 <button
-                  onClick={() => { setCurrentStep(1); setMainFile(null); setBcFile(null); setResult(null); setPreview(null); }}
+                  onClick={() => { if (!window.confirm("Réinitialiser le back check ? Tous les résultats seront perdus.")) return; setCurrentStep(1); setMainFile(null); setBcFile(null); setResult(null); setPreview(null); }}
                   className="bg-navy text-white px-5 py-2.5 rounded-xl font-bold hover:bg-navy-deep"
                 >
                   Recommencer

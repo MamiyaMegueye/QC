@@ -82,15 +82,15 @@ app = FastAPI(
 #  Si elles ne sont pas definies, les anciens identifiants par defaut
 #  restent valables (a changer impérativement en production).
 # ----------------------------------------------------------------------
-APP_USERNAME = os.environ.get("APP_USERNAME", "sista26")
-APP_PASSWORD = os.environ.get("APP_PASSWORD", "1234")
+APP_USERNAME = os.environ.get("APP_USERNAME", "")
+APP_PASSWORD = os.environ.get("APP_PASSWORD", "")
 TOKEN_TTL_SECONDS = 12 * 3600
 PUBLIC_PATHS = {"/", "/api/login"}
 _LOGIN_FAILURES: dict = {}   # ip -> [timestamps]
 
-if "APP_PASSWORD" not in os.environ:
-    print("[SECURITE] APP_PASSWORD non defini : identifiants par defaut actifs. "
-          "Definissez APP_USERNAME / APP_PASSWORD (et APP_SECRET) sur Render.")
+if not APP_USERNAME or not APP_PASSWORD:
+    print("[SECURITE] APP_USERNAME ou APP_PASSWORD non defini. "
+                    "Definissez APP_USERNAME / APP_PASSWORD (et APP_SECRET) dans les variables d'environnement.")
 
 
 def _auth_secret() -> bytes:

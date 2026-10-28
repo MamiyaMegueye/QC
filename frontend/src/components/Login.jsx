@@ -1,17 +1,20 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useStore } from "../store/useStore"
-import { Lock, User, AlertCircle, LogIn } from "lucide-react"
+import { Lock, User, AlertCircle, LogIn, Loader2 } from "lucide-react"
 import { api, setToken } from "../api/client"
-
-// Les identifiants ne sont plus dans le code : ils sont verifies par le serveur
-// (variables APP_USERNAME / APP_PASSWORD sur Render).
 
 export default function Login() {
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
+  const [coldStart, setColdStart] = useState(false)
   const setAuthenticated = useStore((s) => s.setAuthenticated)
+
+  // Préchauffe le backend dès l'affichage du login
+  useEffect(() => {
+    fetch(( import.meta.env.VITE_API_URL || "") + "/").catch(() => {})
+  }, [])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -21,21 +24,37 @@ export default function Login() {
       return
     }
     setLoading(true)
-    try {
-      const data = await api.login(username.trim(), password)
-      setToken(data.token)
-      try { localStorage.setItem("sista_auth", "1") } catch {}
-      setAuthenticated(true)
-    } catch (err) {
-      const msg = String(err.message || "")
-      setError(
-        msg.includes("Failed to fetch") || msg.includes("NetworkError")
-          ? "Serveur injoignable. Réessayez dans quelques secondes (il peut être en cours de démarrage)."
-          : msg || "Nom d'utilisateur ou mot de passe incorrect"
-      )
-    } finally {
-      setLoading(false)
+    setColdStart(false)
+
+    // Tentative avec retry automatique (cold start Vercel)
+    let attempts = 0
+    const maxAttempts = 3
+    while (attempts < maxAttempts) {
+      try {
+        const data = await api.login(username.trim(), password)
+        setToken(data.token)
+        try { localStorage.setItem("sista_auth", "1") } catch {}
+        setAuthenticated(true)
+        return
+      } catch (err) {
+        attempts++
+        const msg = String(err.message || "")
+        const isNetwork = msg.includes("Failed to fetch") || msg.includes("NetworkError") || msg.includes("timeout")
+        if (isNetwork && attempts < maxAttempts) {
+          setColdStart(true)
+          await new Promise((r) => setTimeout(r, 3000))
+          continue
+        }
+        setError(
+          isNetwork
+            ? "Le serveur met du temps à démarrer. Réessayez dans quelques secondes."
+            : msg || "Nom d'utilisateur ou mot de passe incorrect"
+        )
+        break
+      }
     }
+    setLoading(false)
+    setColdStart(false)
   }
 
   return (
@@ -105,6 +124,15 @@ export default function Login() {
               />
             </div>
 
+            {coldStart && !error && (
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-center gap-2 slide-up">
+                <Loader2 className="w-5 h-5 text-blue-600 flex-shrink-0 animate-spin" />
+                <span className="text-blue-800 text-sm font-medium">
+                  Démarrage du serveur en cours, veuillez patienter…
+                </span>
+              </div>
+            )}
+
             {error && (
               <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-center gap-2 slide-up">
                 <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
@@ -119,13 +147,16 @@ export default function Login() {
               disabled={loading}
               className="btn-primary w-full justify-center flex items-center gap-2 mt-2 disabled:opacity-60"
             >
-              <LogIn className="w-4 h-4" />
-              {loading ? "Connexion..." : "Se connecter"}
+              {loading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <LogIn className="w-4 h-4" />
+              )}
+              {loading ? (coldStart ? "Démarrage du serveur…" : "Connexion…") : "Se connecter"}
             </button>
           </form>
         </div>
 
-        {/* Footer */}
         <p className="text-center text-gray-400 text-xs mt-6">
           
         </p>
