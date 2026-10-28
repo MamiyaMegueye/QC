@@ -1261,7 +1261,7 @@ Réponds UNIQUEMENT en JSON valide avec cette structure :
         result = _call_llm(
             api=api,
             api_key=key,
-            model="claude-sonnet-4-6" if api == "api1" else "llama-3.1-70b-versatile",
+            model="claude-haiku-4-5" if api == "api1" else "llama-3.1-70b-versatile",
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             max_tokens=4096,
@@ -1573,7 +1573,7 @@ Réponds UNIQUEMENT en JSON valide :
         from core.ai_agent import _call_llm
         result = _call_llm(
             api=api, api_key=key,
-            model="claude-sonnet-4-6" if api == "api1" else "llama-3.1-70b-versatile",
+            model="claude-haiku-4-5" if api == "api1" else "llama-3.1-70b-versatile",
             system_prompt=system_prompt, user_prompt=user_prompt,
             max_tokens=4096,
         )
