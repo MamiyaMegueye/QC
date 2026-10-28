@@ -1171,3 +1171,121 @@ async def generate_questionnaire(
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         headers={"Content-Disposition": f'attachment; filename="{output_name}"'},
     )
+
+
+# ======================================================================
+#  Diagnostic Audit — Analyse IA d'un questionnaire d'enquête
+# ======================================================================
+
+@app.post("/api/diagnostic-audit")
+async def diagnostic_audit(
+    questionnaire: UploadFile = File(...),
+    api: str = Form("api1"),
+    api_key: str = Form(""),
+):
+    """Charge un questionnaire (.xlsx/.docx) et produit un diagnostic IA."""
+    import traceback
+
+    try:
+        q_path = _save_upload(questionnaire)
+        fname = questionnaire.filename.lower()
+
+        # --- Extraction du contenu ---
+        q_text = ""
+        if fname.endswith((".xlsx", ".xls")):
+            try:
+                df = pd.read_excel(q_path, sheet_name=0)
+                q_text = df.to_string(max_colwidth=120, index=False)[:12000]
+            except Exception as e:
+                q_text = f"(Erreur lecture Excel : {e})"
+        elif fname.endswith(".docx"):
+            try:
+                from docx import Document as DocxDocument
+                doc = DocxDocument(q_path)
+                paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
+                tables_text = []
+                for table in doc.tables:
+                    for row in table.rows:
+                        tables_text.append(" | ".join(c.text.strip() for c in row.cells))
+                q_text = "\n".join(paragraphs + tables_text)[:12000]
+            except Exception as e:
+                q_text = f"(Erreur lecture DOCX : {e})"
+        elif fname.endswith((".csv", ".txt")):
+            with open(q_path, "r", encoding="utf-8", errors="ignore") as f:
+                q_text = f.read()[:12000]
+        else:
+            raise HTTPException(400, "Format non supporté. Utilisez .xlsx, .docx ou .csv")
+
+        if not q_text.strip():
+            raise HTTPException(400, "Le fichier semble vide ou illisible.")
+
+        # --- Prompt IA ---
+        system_prompt = """Tu es un expert en méthodologie d'enquêtes statistiques et contrôle qualité.
+On te fournit le contenu d'un questionnaire d'enquête. Tu dois produire un diagnostic complet en JSON.
+
+Analyse les points suivants :
+1. **Structure** : sections bien organisées ? questions numérotées ? codes uniques ?
+2. **Formulation** : questions claires, non biaisées, non ambiguës ?
+3. **Modalités de réponse** : complètes ? mutuellement exclusives ? exhaustives ?
+4. **Sauts conditionnels** : logiques cohérentes ? références existantes ?
+5. **Types de variables** : adaptés (texte, entier, choix unique/multiple, GPS…) ?
+6. **Doublons** : codes ou questions dupliqués ?
+7. **Bonnes pratiques** : question de consentement ? identifiants enquêteur/date ? note de clôture ?
+
+Réponds UNIQUEMENT en JSON valide avec cette structure :
+{
+  "score_global": <int 0-100>,
+  "resume": "<résumé en 2-3 phrases>",
+  "nb_questions": <int>,
+  "nb_sections": <int>,
+  "problemes": [
+    {
+      "severite": "critique|majeur|mineur",
+      "categorie": "structure|formulation|modalites|sauts|types|doublons|bonnes_pratiques",
+      "question_code": "<code ou N° de la question concernée>",
+      "description": "<description du problème>",
+      "recommandation": "<suggestion de correction>"
+    }
+  ],
+  "points_forts": ["<point fort 1>", "<point fort 2>"],
+  "recommandations_generales": ["<reco 1>", "<reco 2>"]
+}"""
+
+        user_prompt = f"Voici le contenu du questionnaire à auditer :\n\n{q_text}"
+
+        key = _resolve_api_key(api, api_key)
+        if not key:
+            raise HTTPException(400, "Clé API manquante. Configurez une clé dans les paramètres.")
+
+        from backend.core.ai_agent import _call_llm
+        result = _call_llm(
+            api=api,
+            api_key=key,
+            model="claude-sonnet-4-20250514" if api == "api1" else "llama-3.1-70b-versatile",
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            max_tokens=4096,
+        )
+
+        # --- Parse JSON ---
+        import re
+        raw = result.get("text", "")
+        # Extraire le JSON du texte (peut être entouré de ```json ... ```)
+        json_match = re.search(r'\{[\s\S]*\}', raw)
+        if json_match:
+            diagnostic = json.loads(json_match.group())
+        else:
+            diagnostic = {"resume": raw, "problemes": [], "score_global": 0}
+
+        diagnostic["tokens"] = {
+            "input": result.get("in_tokens", 0),
+            "output": result.get("out_tokens", 0),
+        }
+
+        return JSONResponse(diagnostic)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(500, f"Erreur diagnostic : {_clean_error_msg(e)}")
