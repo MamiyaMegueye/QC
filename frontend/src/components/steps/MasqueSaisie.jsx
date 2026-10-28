@@ -1,12 +1,10 @@
 import { useState, useRef } from "react"
-import { Upload, FileSpreadsheet, Download, Loader2, Info, XCircle, CheckCircle2, Table2, List } from "lucide-react"
-import { useStore } from "../../store/useStore"
+import { Upload, FileSpreadsheet, Download, Loader2, XCircle, CheckCircle2, Table2, List } from "lucide-react"
 import { getToken } from "../../api/client"
 
 const API_URL = import.meta.env.VITE_API_URL || ""
 
 export default function MasqueSaisie() {
-  const { apiKey1, apiKey2 } = useStore()
   const [file, setFile] = useState(null)
   const [format, setFormat] = useState("kobo")
   const [loading, setLoading] = useState(false)
@@ -15,8 +13,6 @@ export default function MasqueSaisie() {
   const [result, setResult] = useState(null)
   const [viewTab, setViewTab] = useState("survey")
   const inputRef = useRef()
-
-  const hasKey = !!(apiKey1 || apiKey2)
 
   const handleFile = (e) => {
     const f = e.target.files?.[0]
@@ -32,8 +28,8 @@ export default function MasqueSaisie() {
       const fd = new FormData()
       fd.append("questionnaire", file)
       fd.append("format_cible", format)
-      fd.append("api", apiKey1 ? "api1" : "api2")
-      fd.append("api_key", apiKey1 || apiKey2)
+      fd.append("api", "api1")
+      fd.append("api_key", "")
 
       const controller = new AbortController()
       const timeout = setTimeout(() => controller.abort(), 300_000)
@@ -69,7 +65,6 @@ export default function MasqueSaisie() {
 
   return (
     <div className="space-y-5">
-      {/* Upload */}
       <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
         <h3 className="font-semibold text-navy mb-3 flex items-center gap-2">
           <FileSpreadsheet className="w-5 h-5 text-accent-teal" />
@@ -78,7 +73,6 @@ export default function MasqueSaisie() {
         <p className="text-sm text-gray-500 mb-4">
           L'IA convertira votre questionnaire en masque de saisie XLSForm (compatible KoboToolbox / ODK).
         </p>
-
         <div onClick={() => inputRef.current?.click()}
           className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center cursor-pointer hover:border-accent-teal/50 hover:bg-teal-50/30 transition-all">
           <input ref={inputRef} type="file" accept=".xlsx,.xls,.docx,.csv" onChange={handleFile} className="hidden" />
@@ -93,8 +87,6 @@ export default function MasqueSaisie() {
             <p className="text-sm text-gray-500">Cliquez pour sélectionner un fichier</p></>
           )}
         </div>
-
-        {/* Format */}
         <div className="mt-4 flex items-center gap-3">
           <span className="text-sm text-gray-600 font-medium">Format cible :</span>
           {["kobo", "cspro"].map((f) => (
@@ -104,34 +96,22 @@ export default function MasqueSaisie() {
             </button>
           ))}
         </div>
-
-        {!hasKey && (
-          <div className="mt-3 flex items-center gap-2 text-amber-600 text-sm bg-amber-50 rounded-lg px-3 py-2">
-            <Info className="w-4 h-4 shrink-0" />
-            Configurez une clé API dans les paramètres.
-          </div>
-        )}
         {error && (
           <div className="mt-3 flex items-center gap-2 text-red-600 text-sm bg-red-50 rounded-lg px-3 py-2">
             <XCircle className="w-4 h-4 shrink-0" />{error}
           </div>
         )}
-
-        <button onClick={runGenerate} disabled={!file || loading || !hasKey}
+        <button onClick={runGenerate} disabled={!file || loading}
           className="mt-4 w-full py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-accent-teal to-emerald-600 hover:shadow-lg disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2">
           {loading ? (<><Loader2 className="w-5 h-5 animate-spin" />Génération en cours…</>) : (<><Table2 className="w-5 h-5" />Générer le masque</>)}
         </button>
       </div>
 
-      {/* Résultats */}
       {result && (
         <div className="space-y-4 animate-fade-in">
-          {/* Résumé */}
           <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5">
             <div className="flex items-center justify-between mb-2">
-              <h4 className="font-semibold text-emerald-700 flex items-center gap-2">
-                <CheckCircle2 className="w-5 h-5" /> Masque généré
-              </h4>
+              <h4 className="font-semibold text-emerald-700 flex items-center gap-2"><CheckCircle2 className="w-5 h-5" /> Masque généré</h4>
               <button onClick={downloadXlsx} disabled={downloading}
                 className="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-all disabled:opacity-50">
                 {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
@@ -146,7 +126,6 @@ export default function MasqueSaisie() {
             </div>
           </div>
 
-          {/* Aperçu tabs */}
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="flex border-b border-gray-200">
               {[{id: "survey", label: "Survey", icon: List}, {id: "choices", label: "Choices", icon: Table2}].map((t) => {
@@ -197,15 +176,12 @@ export default function MasqueSaisie() {
             </div>
           </div>
 
-          {/* Notes de conception */}
           {result.notes_conception?.length > 0 && (
             <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
               <h4 className="font-semibold text-blue-700 mb-2">Notes de conception</h4>
               <ul className="space-y-1">
                 {result.notes_conception.map((n, i) => (
-                  <li key={i} className="text-sm text-blue-800 flex items-start gap-2">
-                    <span className="text-blue-400 mt-0.5">•</span> {n}
-                  </li>
+                  <li key={i} className="text-sm text-blue-800 flex items-start gap-2"><span className="text-blue-400 mt-0.5">•</span> {n}</li>
                 ))}
               </ul>
             </div>

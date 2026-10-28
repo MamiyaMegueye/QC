@@ -1,6 +1,5 @@
 import { useState, useRef } from "react"
-import { Upload, FileSpreadsheet, Loader2, Info, XCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronUp } from "lucide-react"
-import { useStore } from "../../store/useStore"
+import { Upload, FileSpreadsheet, Loader2, XCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronUp } from "lucide-react"
 import { getToken } from "../../api/client"
 
 const API_URL = import.meta.env.VITE_API_URL || ""
@@ -22,15 +21,12 @@ const CAT_LABELS = {
 }
 
 export default function DiagnosticProgramme() {
-  const { apiKey1, apiKey2 } = useStore()
   const [file, setFile] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [result, setResult] = useState(null)
   const [expanded, setExpanded] = useState({})
   const inputRef = useRef()
-
-  const hasKey = !!(apiKey1 || apiKey2)
 
   const handleFile = (e) => {
     const f = e.target.files?.[0]
@@ -45,8 +41,8 @@ export default function DiagnosticProgramme() {
     try {
       const fd = new FormData()
       fd.append("programme", file)
-      fd.append("api", apiKey1 ? "api1" : "api2")
-      fd.append("api_key", apiKey1 || apiKey2)
+      fd.append("api", "api1")
+      fd.append("api_key", "")
 
       const controller = new AbortController()
       const timeout = setTimeout(() => controller.abort(), 300_000)
@@ -62,13 +58,11 @@ export default function DiagnosticProgramme() {
   }
 
   const toggle = (cat) => setExpanded((p) => ({ ...p, [cat]: !p[cat] }))
-
   const scoreColor = (s) => s >= 80 ? "text-emerald-600" : s >= 50 ? "text-amber-600" : "text-red-600"
   const scoreBg = (s) => s >= 80 ? "bg-emerald-50 border-emerald-200" : s >= 50 ? "bg-amber-50 border-amber-200" : "bg-red-50 border-red-200"
 
   return (
     <div className="space-y-5">
-      {/* Upload */}
       <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
         <h3 className="font-semibold text-navy mb-3 flex items-center gap-2">
           <FileSpreadsheet className="w-5 h-5 text-accent-violet" />
@@ -77,7 +71,6 @@ export default function DiagnosticProgramme() {
         <p className="text-sm text-gray-500 mb-4">
           Chargez un fichier XLSForm (.xlsx) contenant les feuilles survey, choices et settings pour un diagnostic complet.
         </p>
-
         <div onClick={() => inputRef.current?.click()}
           className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center cursor-pointer hover:border-accent-violet/50 hover:bg-violet-50/30 transition-all">
           <input ref={inputRef} type="file" accept=".xlsx,.xls" onChange={handleFile} className="hidden" />
@@ -92,29 +85,19 @@ export default function DiagnosticProgramme() {
             <p className="text-sm text-gray-500">Cliquez pour sélectionner un fichier XLSForm</p></>
           )}
         </div>
-
-        {!hasKey && (
-          <div className="mt-3 flex items-center gap-2 text-amber-600 text-sm bg-amber-50 rounded-lg px-3 py-2">
-            <Info className="w-4 h-4 shrink-0" />
-            Configurez une clé API dans les paramètres.
-          </div>
-        )}
         {error && (
           <div className="mt-3 flex items-center gap-2 text-red-600 text-sm bg-red-50 rounded-lg px-3 py-2">
             <XCircle className="w-4 h-4 shrink-0" />{error}
           </div>
         )}
-
-        <button onClick={runDiag} disabled={!file || loading || !hasKey}
+        <button onClick={runDiag} disabled={!file || loading}
           className="mt-4 w-full py-3 rounded-xl font-semibold text-white bg-gradient-to-r from-accent-violet to-purple-600 hover:shadow-lg disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2">
           {loading ? (<><Loader2 className="w-5 h-5 animate-spin" />Analyse en cours…</>) : (<><AlertTriangle className="w-5 h-5" />Lancer le diagnostic</>)}
         </button>
       </div>
 
-      {/* Résultats */}
       {result && (
         <div className="space-y-4 animate-fade-in">
-          {/* Score */}
           <div className={`rounded-2xl border p-5 ${scoreBg(result.score)}`}>
             <div className="flex items-center justify-between">
               <h4 className="font-semibold flex items-center gap-2">
@@ -126,25 +109,20 @@ export default function DiagnosticProgramme() {
             <p className="text-sm mt-2 text-gray-700">{result.resume}</p>
           </div>
 
-          {/* Points forts */}
           {result.points_forts?.length > 0 && (
             <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4">
               <h4 className="font-semibold text-emerald-700 mb-2">Points forts</h4>
               <ul className="space-y-1">
                 {result.points_forts.map((p, i) => (
-                  <li key={i} className="text-sm text-emerald-800 flex items-start gap-2">
-                    <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-500" />{p}
-                  </li>
+                  <li key={i} className="text-sm text-emerald-800 flex items-start gap-2"><CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-500" />{p}</li>
                 ))}
               </ul>
             </div>
           )}
 
-          {/* Problèmes par catégorie */}
           {result.problemes && Object.entries(result.problemes).filter(([,v]) => v?.length > 0).map(([cat, items]) => (
             <div key={cat} className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-              <button onClick={() => toggle(cat)}
-                className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors">
+              <button onClick={() => toggle(cat)} className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors">
                 <div className="flex items-center gap-3">
                   <span className="font-semibold text-navy">{CAT_LABELS[cat] || cat}</span>
                   <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{items.length}</span>
@@ -172,15 +150,12 @@ export default function DiagnosticProgramme() {
             </div>
           ))}
 
-          {/* Recommandations */}
           {result.recommandations?.length > 0 && (
             <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
               <h4 className="font-semibold text-blue-700 mb-2">Recommandations</h4>
               <ul className="space-y-1">
                 {result.recommandations.map((r, i) => (
-                  <li key={i} className="text-sm text-blue-800 flex items-start gap-2">
-                    <span className="text-blue-400 mt-0.5">•</span>{r}
-                  </li>
+                  <li key={i} className="text-sm text-blue-800 flex items-start gap-2"><span className="text-blue-400 mt-0.5">•</span>{r}</li>
                 ))}
               </ul>
             </div>
