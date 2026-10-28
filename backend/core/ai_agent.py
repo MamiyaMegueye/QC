@@ -63,7 +63,10 @@ def _extract_json(text: str) -> Any:
     end = max(text.rfind("}"), text.rfind("]"))
     if start >= 0 and end > start:
         text = text[start:end + 1]
-    return json.loads(text)
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return None
 
 
 def _estimate_tokens(text: str) -> int:

@@ -2,12 +2,10 @@ import { Check } from "lucide-react"
 import { useStore } from "../store/useStore"
 
 const STEPS = [
-  { num: 1, label: "Importer" },
-  { num: 2, label: "Détecter" },
-  // Renommage demande par SISTA v2 : "Rapport QC" -> "Bilan par enqueteur"
-  { num: 3, label: "Bilan par enquêteur" },
-  { num: 4, label: "Rapport analytique" },
-  { num: 5, label: "Questionnaire" },
+  { num: 1, label: "Questionnaire" },
+  { num: 2, label: "Collecte" },
+  { num: 3, label: "Back check" },
+  { num: 4, label: "Rapport d'analyse" },
 ]
 
 export default function Stepper() {
@@ -22,8 +20,8 @@ export default function Stepper() {
   }
 
   const canGoTo = (num) => {
-    if (num === 5) return true
     if (num === 1) return true
+    if (num === 2) return true
     return !!sessionId
   }
 

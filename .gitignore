@@ -42,3 +42,6 @@ temp/
 .coverage
 htmlcov/
 .ipynb_checkpoints/
+
+.vercel
+.env*

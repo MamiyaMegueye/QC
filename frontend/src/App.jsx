@@ -5,11 +5,10 @@ import Login from "./components/Login"
 import Header from "./components/Header"
 import Stepper from "./components/Stepper"
 import InfoBanner from "./components/InfoBanner"
-import Step1Import from "./components/steps/Step1Import"
-import Step2Detect from "./components/steps/Step2Detect"
+import Step5XlsForm from "./components/steps/Step5XlsForm"
+import Step2Collecte from "./components/steps/Step2Collecte"
 import Step3Report from "./components/steps/Step3Report"
 import Step4AnalyticalReport from "./components/steps/Step4AnalyticalReport"
-import Step5XlsForm from "./components/steps/Step5XlsForm"
 import { AlertCircle } from "lucide-react"
 
 export default function App() {
@@ -53,11 +52,10 @@ export default function App() {
           </div>
         )}
 
-        {currentStep === 1 && <Step1Import />}
-        {currentStep === 2 && <Step2Detect />}
+        {currentStep === 1 && <Step5XlsForm />}
+        {currentStep === 2 && <Step2Collecte />}
         {currentStep === 3 && <Step3Report />}
         {currentStep === 4 && <Step4AnalyticalReport />}
-        {currentStep === 5 && <Step5XlsForm />}
       </div>
     </div>
   )

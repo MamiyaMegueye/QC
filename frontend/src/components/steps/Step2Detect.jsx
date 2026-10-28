@@ -19,7 +19,7 @@ export default function Step2Detect() {
         <p className="text-gray-600 mb-4">
           Veuillez d'abord importer un fichier.
         </p>
-        <button onClick={() => setStep(1)} className="btn-secondary">
+        <button onClick={() => setStep(2)} className="btn-secondary">
           <ArrowLeft className="w-4 h-4 inline mr-1" /> Retour
         </button>
       </div>
