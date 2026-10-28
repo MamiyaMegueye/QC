@@ -1,11 +1,15 @@
 import { useState } from "react"
-import { FileText, Search } from "lucide-react"
+import { FileText, Search, Table2, AlertTriangle } from "lucide-react"
 import Step5XlsForm from "./Step5XlsForm"
 import DiagnosticAudit from "./DiagnosticAudit"
+import MasqueSaisie from "./MasqueSaisie"
+import DiagnosticProgramme from "./DiagnosticProgramme"
 
 const TABS = [
   { id: "generateur", label: "Générateur", shortLabel: "Génér.", icon: FileText, description: "Élaborer un questionnaire structuré" },
-  { id: "diagnostic", label: "Diagnostic Audit", shortLabel: "Diag.", icon: Search, description: "Charger un questionnaire → Audit IA" },
+  { id: "diagnostic", label: "Diagnostic Audit", shortLabel: "Audit", icon: Search, description: "Charger un questionnaire → Audit IA" },
+  { id: "masque", label: "Masque de saisie", shortLabel: "Masque", icon: Table2, description: "Questionnaire → XLSForm" },
+  { id: "programme", label: "Diag. Programme", shortLabel: "Prog.", icon: AlertTriangle, description: "XLSForm → Diagnostic" },
 ]
 
 export default function Step1Questionnaire() {
@@ -14,7 +18,7 @@ export default function Step1Questionnaire() {
   return (
     <div className="slide-up space-y-4">
       {/* Sub-tabs */}
-      <div className="flex gap-2">
+      <div className="flex gap-1.5 flex-wrap">
         {TABS.map((tab) => {
           const Icon = tab.icon
           const active = activeTab === tab.id
@@ -22,7 +26,7 @@ export default function Step1Questionnaire() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-semibold transition-all ${
                 active
                   ? "bg-gradient-to-r from-accent-violet to-purple-600 text-white shadow-md"
                   : "bg-white text-gray-600 border border-gray-200 hover:border-accent-violet/40 hover:text-accent-violet"
@@ -39,6 +43,8 @@ export default function Step1Questionnaire() {
       {/* Content */}
       {activeTab === "generateur" && <Step5XlsForm />}
       {activeTab === "diagnostic" && <DiagnosticAudit />}
+      {activeTab === "masque" && <MasqueSaisie />}
+      {activeTab === "programme" && <DiagnosticProgramme />}
     </div>
   )
 }

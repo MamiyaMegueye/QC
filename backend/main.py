@@ -1289,3 +1289,308 @@ Réponds UNIQUEMENT en JSON valide avec cette structure :
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(500, f"Erreur diagnostic : {_clean_error_msg(e)}")
+
+
+# ======================================================================
+#  Confection du masque de saisie — Génère un XLSForm à partir d'un questionnaire
+# ======================================================================
+
+@app.post("/api/masque-saisie")
+async def masque_saisie(
+    questionnaire: UploadFile = File(...),
+    format_cible: str = Form("kobo"),
+    api: str = Form("api1"),
+    api_key: str = Form(""),
+):
+    """Charge un questionnaire et génère un masque de saisie XLSForm."""
+    import traceback
+
+    try:
+        q_path = _save_upload(questionnaire)
+        fname = questionnaire.filename.lower()
+
+        # --- Extraction du contenu ---
+        q_text = ""
+        if fname.endswith((".xlsx", ".xls")):
+            try:
+                df = pd.read_excel(q_path, sheet_name=0)
+                q_text = df.to_string(max_colwidth=120, index=False)[:12000]
+            except Exception as e:
+                q_text = f"(Erreur lecture Excel : {e})"
+        elif fname.endswith(".docx"):
+            try:
+                from docx import Document as DocxDocument
+                doc = DocxDocument(q_path)
+                paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
+                tables_text = []
+                for table in doc.tables:
+                    for row in table.rows:
+                        tables_text.append(" | ".join(c.text.strip() for c in row.cells))
+                q_text = "\n".join(paragraphs + tables_text)[:12000]
+            except Exception as e:
+                q_text = f"(Erreur lecture DOCX : {e})"
+        elif fname.endswith((".csv", ".txt")):
+            with open(q_path, "r", encoding="utf-8", errors="ignore") as f:
+                q_text = f.read()[:12000]
+        else:
+            raise HTTPException(400, "Format non supporté. Utilisez .xlsx, .docx ou .csv")
+
+        if not q_text.strip():
+            raise HTTPException(400, "Le fichier semble vide ou illisible.")
+
+        format_label = "KoboToolbox (XLSForm)" if format_cible == "kobo" else "CSPro"
+
+        system_prompt = f"""Tu es un expert en conception de formulaires de collecte de données pour les enquêtes statistiques.
+On te fournit un questionnaire d'enquête. Tu dois générer un masque de saisie au format {format_label}.
+
+Produis un JSON avec cette structure :
+{{
+  "form_title": "<titre du formulaire>",
+  "form_id": "<identifiant court>",
+  "format": "{format_cible}",
+  "resume": "<résumé de ce qui a été généré, 2-3 phrases>",
+  "nb_questions": <int>,
+  "survey": [
+    {{
+      "type": "<type XLSForm: text|integer|decimal|select_one <list>|select_multiple <list>|date|geopoint|note|begin_group|end_group|begin_repeat|end_repeat|calculate>",
+      "name": "<nom de variable>",
+      "label": "<libellé de la question>",
+      "required": "yes|no",
+      "constraint": "<contrainte XLSForm ou vide>",
+      "constraint_message": "<message d'erreur ou vide>",
+      "relevant": "<condition d'affichage ou vide>",
+      "appearance": "<apparence: minimal|field-list|likert ou vide>",
+      "calculation": "<formule ou vide>",
+      "repeat_count": "<expression ou vide>"
+    }}
+  ],
+  "choices": [
+    {{
+      "list_name": "<nom de la liste>",
+      "name": "<valeur>",
+      "label": "<libellé>"
+    }}
+  ],
+  "settings": {{
+    "form_title": "<titre>",
+    "form_id": "<id>",
+    "version": "<version>",
+    "default_language": "French (fr)"
+  }},
+  "notes_conception": ["<note 1>", "<note 2>"]
+}}
+
+Règles :
+- Chaque question du questionnaire source doit avoir son équivalent dans survey
+- Ajoute les groupes logiques (begin_group/end_group)
+- Traduis les sauts conditionnels en expressions "relevant" XLSForm
+- Crée les listes de choix correspondantes dans "choices"
+- Ajoute les contraintes de validation (min, max, regex…)
+- Ajoute une question de consentement si absente
+- Ajoute des métadonnées enquêteur (nom, date, GPS) si absentes"""
+
+        user_prompt = f"Voici le questionnaire source à convertir en masque de saisie :\n\n{q_text}"
+
+        key = _resolve_api_key(api, api_key)
+        if not key:
+            raise HTTPException(400, "Clé API manquante.")
+
+        from backend.core.ai_agent import _call_llm
+        result = _call_llm(
+            api=api, api_key=key,
+            model="claude-sonnet-4-20250514" if api == "api1" else "llama-3.1-70b-versatile",
+            system_prompt=system_prompt, user_prompt=user_prompt,
+            max_tokens=8192,
+        )
+
+        import re
+        raw = result.get("text", "")
+        json_match = re.search(r'\{[\s\S]*\}', raw)
+        if json_match:
+            masque = json.loads(json_match.group())
+        else:
+            masque = {"resume": raw, "survey": [], "choices": []}
+
+        masque["tokens"] = {"input": result.get("in_tokens", 0), "output": result.get("out_tokens", 0)}
+        return JSONResponse(masque)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(500, f"Erreur génération masque : {_clean_error_msg(e)}")
+
+
+@app.post("/api/masque-saisie/download")
+async def masque_saisie_download(req: dict = Body(...)):
+    """Génère le fichier .xlsx XLSForm à partir du JSON masque."""
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+        wb = Workbook()
+        header_fill = PatternFill("solid", fgColor="1B3A5C")
+        header_font = Font(name="Arial", bold=True, color="FFFFFF", size=10)
+        body_font = Font(name="Arial", size=10)
+        thin = Side(style="thin", color="CCCCCC")
+        border = Border(top=thin, bottom=thin, left=thin, right=thin)
+
+        # --- survey sheet ---
+        ws = wb.active
+        ws.title = "survey"
+        sv_cols = ["type", "name", "label", "required", "constraint", "constraint_message", "relevant", "appearance", "calculation", "repeat_count"]
+        for i, h in enumerate(sv_cols, 1):
+            c = ws.cell(row=1, column=i, value=h)
+            c.font = header_font
+            c.fill = header_fill
+            c.border = border
+            ws.column_dimensions[chr(64 + i) if i <= 26 else "A" + chr(64 + i - 26)].width = 22
+
+        for r, row_data in enumerate(req.get("survey", []), 2):
+            for ci, col in enumerate(sv_cols, 1):
+                cell = ws.cell(row=r, column=ci, value=row_data.get(col, ""))
+                cell.font = body_font
+                cell.border = border
+
+        # --- choices sheet ---
+        ch = wb.create_sheet("choices")
+        ch_cols = ["list_name", "name", "label"]
+        for i, h in enumerate(ch_cols, 1):
+            c = ch.cell(row=1, column=i, value=h)
+            c.font = header_font
+            c.fill = header_fill
+            c.border = border
+            ch.column_dimensions[chr(64 + i)].width = 22
+
+        for r, row_data in enumerate(req.get("choices", []), 2):
+            for ci, col in enumerate(ch_cols, 1):
+                cell = ch.cell(row=r, column=ci, value=row_data.get(col, ""))
+                cell.font = body_font
+                cell.border = border
+
+        # --- settings sheet ---
+        st = wb.create_sheet("settings")
+        settings = req.get("settings", {})
+        st_cols = ["form_title", "form_id", "version", "default_language"]
+        for i, h in enumerate(st_cols, 1):
+            c = st.cell(row=1, column=i, value=h)
+            c.font = header_font
+            c.fill = header_fill
+            c.border = border
+            st.column_dimensions[chr(64 + i)].width = 22
+            st.cell(row=2, column=i, value=settings.get(h, "")).font = body_font
+
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+
+        form_id = settings.get("form_id", "masque")
+        return StreamingResponse(
+            buf,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f'attachment; filename="masque_{form_id}.xlsx"'},
+        )
+
+    except Exception as e:
+        raise HTTPException(500, f"Erreur export : {str(e)}")
+
+
+# ======================================================================
+#  Diagnostic Programme de collecte — Analyse un XLSForm existant
+# ======================================================================
+
+@app.post("/api/diagnostic-programme")
+async def diagnostic_programme(
+    programme: UploadFile = File(...),
+    api: str = Form("api1"),
+    api_key: str = Form(""),
+):
+    """Charge un programme de collecte (XLSForm) et produit un diagnostic IA."""
+    import traceback
+
+    try:
+        p_path = _save_upload(programme)
+        fname = programme.filename.lower()
+
+        # --- Extraction multi-sheets ---
+        content_parts = []
+        if fname.endswith((".xlsx", ".xls")):
+            try:
+                xls = pd.ExcelFile(p_path)
+                for sheet in xls.sheet_names:
+                    df = pd.read_excel(xls, sheet_name=sheet)
+                    content_parts.append(f"=== Sheet: {sheet} ===\n{df.to_string(max_colwidth=100, index=False)[:5000]}")
+            except Exception as e:
+                content_parts.append(f"(Erreur lecture : {e})")
+        elif fname.endswith((".csv", ".txt")):
+            with open(p_path, "r", encoding="utf-8", errors="ignore") as f:
+                content_parts.append(f.read()[:12000])
+        else:
+            raise HTTPException(400, "Format non supporté. Utilisez .xlsx ou .csv")
+
+        q_text = "\n\n".join(content_parts)[:14000]
+        if not q_text.strip():
+            raise HTTPException(400, "Le fichier semble vide ou illisible.")
+
+        system_prompt = """Tu es un expert en programmes de collecte de données (KoboToolbox, ODK, CSPro).
+On te fournit le contenu d'un programme de collecte (XLSForm ou similaire). Tu dois produire un diagnostic complet en JSON.
+
+Analyse les points suivants :
+1. **Listes de choix** : toutes les listes référencées dans survey existent-elles dans choices ? Y a-t-il des listes non utilisées ?
+2. **Logique conditionnelle (relevant)** : les expressions sont-elles valides ? Les variables référencées existent-elles ? Les valeurs comparées correspondent-elles aux choix ?
+3. **Contraintes** : les validations sont-elles présentes pour les champs numériques ? Les regex sont-elles correctes ?
+4. **Structure** : les groupes et repeat sont-ils correctement ouverts/fermés ? Le repeat_count est-il cohérent ?
+5. **Nommage** : les noms de variables sont-ils valides (pas d'espaces, pas de caractères spéciaux) ?
+6. **Variables orphelines** : des variables calculées ou questions qui ne sont jamais référencées ailleurs ?
+7. **Bonnes pratiques** : métadonnées présentes ? consentement ? GPS ?
+
+Réponds UNIQUEMENT en JSON valide :
+{
+  "score_global": <int 0-100>,
+  "resume": "<résumé 2-3 phrases>",
+  "nb_questions": <int>,
+  "nb_listes": <int>,
+  "nb_groupes": <int>,
+  "problemes": [
+    {
+      "severite": "critique|majeur|mineur",
+      "categorie": "listes|logique|contraintes|structure|nommage|orphelins|bonnes_pratiques",
+      "element": "<nom variable ou liste concernée>",
+      "description": "<description du problème>",
+      "recommandation": "<suggestion de correction>"
+    }
+  ],
+  "points_forts": ["<point fort 1>", "<point fort 2>"],
+  "recommandations_generales": ["<reco 1>", "<reco 2>"]
+}"""
+
+        user_prompt = f"Voici le programme de collecte à diagnostiquer :\n\n{q_text}"
+
+        key = _resolve_api_key(api, api_key)
+        if not key:
+            raise HTTPException(400, "Clé API manquante.")
+
+        from backend.core.ai_agent import _call_llm
+        result = _call_llm(
+            api=api, api_key=key,
+            model="claude-sonnet-4-20250514" if api == "api1" else "llama-3.1-70b-versatile",
+            system_prompt=system_prompt, user_prompt=user_prompt,
+            max_tokens=4096,
+        )
+
+        import re
+        raw = result.get("text", "")
+        json_match = re.search(r'\{[\s\S]*\}', raw)
+        if json_match:
+            diagnostic = json.loads(json_match.group())
+        else:
+            diagnostic = {"resume": raw, "problemes": [], "score_global": 0}
+
+        diagnostic["tokens"] = {"input": result.get("in_tokens", 0), "output": result.get("out_tokens", 0)}
+        return JSONResponse(diagnostic)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(500, f"Erreur diagnostic programme : {_clean_error_msg(e)}")
