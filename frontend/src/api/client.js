@@ -202,7 +202,7 @@ export const api = {
 
   // Execution de la comparaison back check
   runBackcheck: async ({
-    mainFile, bcFile, mainCodeCols, bcCodeCols,
+    mainFile, bcFile, mainCodeCols, bcCodeCols, sampleSize,
     variablesConfig, mainEnqueteurCol, mainLabel, bcLabel,
   }) => {
     const formData = new FormData()
@@ -214,6 +214,7 @@ export const api = {
     if (mainEnqueteurCol) formData.append("main_enqueteur_col", mainEnqueteurCol)
     if (mainLabel) formData.append("main_label", mainLabel)
     if (bcLabel) formData.append("bc_label", bcLabel)
+    if (sampleSize) formData.append("sample_size", sampleSize)
     const res = await authFetch(`${API_URL}/api/backcheck/run`, {
       method: "POST",
       body: formData,

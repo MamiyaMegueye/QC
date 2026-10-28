@@ -186,6 +186,7 @@ def run_backcheck(
     variables_config,
     main_label="Enquete principale",
     bc_label="Back check",
+    sample_size=None,
 ):
     """Execute la comparaison back check.
 
@@ -233,6 +234,11 @@ def run_backcheck(
     matched_codes = codes_main_set & codes_bc_set
     orphan_main = codes_main_set - codes_bc_set
     orphan_bc = codes_bc_set - codes_main_set
+
+    # Echantillonnage aleatoire si demande
+    if sample_size and sample_size > 0 and sample_size < len(matched_codes):
+        import random
+        matched_codes = set(random.sample(sorted(matched_codes), sample_size))
 
     # Index par code (premiere occurrence en cas de doublons)
     main_by_code = df_main_ok.drop_duplicates(subset=["_code"], keep="first").set_index("_code")

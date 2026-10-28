@@ -775,6 +775,7 @@ async def backcheck_run_endpoint(
     main_enqueteur_col: str = Form(""),  # optionnel
     main_label: str = Form("Enquete principale"),
     bc_label: str = Form("Back check"),
+    sample_size: int = Form(None),         # optionnel : taille echantillon aleatoire
 ):
     """Execute la comparaison back check (controle croise).
 
@@ -816,6 +817,7 @@ async def backcheck_run_endpoint(
             variables_config=vars_cfg,
             main_label=main_label,
             bc_label=bc_label,
+            sample_size=sample_size,
         )
         result["main_filename"] = main_file.filename
         result["bc_filename"] = bc_file.filename

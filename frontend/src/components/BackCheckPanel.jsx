@@ -42,6 +42,8 @@ export default function BackCheckPanel({ onClose }) {
   const [mainEnqueteurCol, setMainEnqueteurCol] = useState("")
   const [varConfigs, setVarConfigs] = useState({})     // {var_name: {selected, type, tolerance, tolerance_type}}
   const [varFilterText, setVarFilterText] = useState("")
+  const [useSampling, setUseSampling] = useState(false)
+  const [sampleSize, setSampleSize] = useState("")
 
   // Etape 3 : resultats
   const [result, setResult] = useState(null)
@@ -188,6 +190,7 @@ export default function BackCheckPanel({ onClose }) {
         mainEnqueteurCol,
         mainLabel,
         bcLabel,
+        sampleSize: useSampling && sampleSize ? Number(sampleSize) : null,
       })
       setResult(data)
       setCurrentStep(3)
@@ -331,6 +334,54 @@ export default function BackCheckPanel({ onClose }) {
           {currentStep === 2 && preview && (
             <div className="space-y-5 slide-up">
               {/* Colonnes clés */}
+              {/* Échantillonnage aléatoire */}
+              <div className="card">
+                <h3 className="card-title flex items-center gap-2">
+                  <Search className="w-5 h-5 text-gold" />
+                  Échantillonnage aléatoire
+                </h3>
+                <p className="card-desc mb-3">
+                  Optionnel : tirez un sous-échantillon aléatoire de la BD source pour le back check.
+                  Si désactivé, toutes les lignes appariées seront comparées.
+                </p>
+                <div className="flex items-center gap-4 flex-wrap">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={useSampling}
+                      onChange={(e) => setUseSampling(e.target.checked)}
+                      className="w-4 h-4"
+                    />
+                    <span className="text-sm font-semibold text-navy">Tirer un échantillon aléatoire</span>
+                  </label>
+                  {useSampling && (
+                    <div className="flex items-center gap-2">
+                      <label className="text-sm text-gray-600">Taille :</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max={preview?.n_main_rows || 9999}
+                        value={sampleSize}
+                        onChange={(e) => setSampleSize(e.target.value)}
+                        placeholder={`max ${preview?.n_main_rows || "?"}`}
+                        className="w-28 text-sm border border-gray-300 rounded-lg px-3 py-1.5 focus:border-gold focus:ring-2 focus:ring-gold/20 outline-none"
+                      />
+                      <span className="text-xs text-gray-500">
+                        sur {preview?.n_main_rows?.toLocaleString() || "?"} lignes
+                      </span>
+                    </div>
+                  )}
+                </div>
+                {useSampling && sampleSize && Number(sampleSize) > 0 && (
+                  <div className="mt-2 bg-blue-50 border-l-4 border-blue-400 rounded-r-lg p-2">
+                    <p className="text-xs text-blue-800 m-0">
+                      <strong>{Number(sampleSize).toLocaleString()}</strong> participants seront tirés aléatoirement de la BD source.
+                      Seuls ceux retrouvés dans le fichier back check seront comparés.
+                    </p>
+                  </div>
+                )}
+              </div>
+
               <div className="card">
                 <h3 className="card-title flex items-center gap-2">
                   <Sliders className="w-5 h-5 text-gold" />
