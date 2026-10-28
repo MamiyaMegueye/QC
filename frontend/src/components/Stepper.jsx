@@ -22,6 +22,7 @@ export default function Stepper() {
   const canGoTo = (num) => {
     if (num === 1) return true
     if (num === 2) return true
+    if (num === 3) return true
     return !!sessionId
   }
 
