@@ -3,12 +3,11 @@ import { useStore } from "../../store/useStore"
 import { api } from "../../api/client"
 import UploadZone from "../ui/UploadZone"
 import { DraftBanner, DraftRestoredBanner, HistoryCard } from "../HistoryPanel"
-import BackCheckPanel from "../BackCheckPanel"
 import {
   CheckCircle, XCircle, Loader2, Sparkles,
   KeyRound, AlertTriangle, RefreshCw,
   ChevronDown, ChevronUp, Clock, Plus, Trash2,
-  Layers, ListChecks, Zap, Info, GitCompare, ArrowRight,
+  Layers, ListChecks, Zap, Info,
 } from "lucide-react"
 
 const TYPES_ENQUETE = [
@@ -632,7 +631,6 @@ export default function Step1Import() {
   const [typeChoice, setTypeChoice] = useState(TYPES_ENQUETE[0])
   const [typeCustom, setTypeCustom] = useState(store.surveyType || "")
   const [testing, setTesting] = useState(false)
-  const [showBackCheck, setShowBackCheck] = useState(false)
 
   // Au montage : verifier si un brouillon existe (recommandation SISTA v2)
   useEffect(() => {
@@ -753,14 +751,6 @@ export default function Step1Import() {
   const currentConfigured = store.selectedApi === "api1" ? store.api1Configured : store.api2Configured
   const canTest = (currentKey && currentKey.length > 0) || currentConfigured
 
-  // Back check : le panneau remplace la page d'import (au lieu de s'empiler dessus)
-  if (showBackCheck) {
-    return (
-      <div className="space-y-5 slide-up">
-        <BackCheckPanel onClose={() => setShowBackCheck(false)} />
-      </div>
-    )
-  }
 
   return (
     <div className="space-y-5 slide-up">
@@ -769,27 +759,6 @@ export default function Step1Import() {
       <DraftBanner />
       <DraftRestoredBanner />
 
-      {/* Outil special : back check / controle croise */}
-      <div className="bg-gradient-to-br from-purple-50 to-blue-50 border border-purple-200 rounded-2xl p-4 flex items-center gap-3 flex-wrap">
-        <div className="bg-purple-600 rounded-full w-10 h-10 flex items-center justify-center flex-shrink-0">
-          <GitCompare className="w-5 h-5 text-white" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="font-sora font-bold text-navy m-0">
-            Back check / Contrôle croisé
-          </p>
-          <p className="text-xs text-gray-600 m-0 mt-1">
-            Comparez votre enquête à une re-interview de contrôle .
-          </p>
-        </div>
-        <button
-          onClick={() => setShowBackCheck(true)}
-          className="text-sm px-4 py-2 rounded-xl bg-purple-600 text-white hover:bg-purple-700 font-bold flex items-center gap-2 whitespace-nowrap"
-        >
-          Ouvrir l'outil
-          <ArrowRight className="w-4 h-4" />
-        </button>
-      </div>
 
       {/* Upload */}
       <div className="card">

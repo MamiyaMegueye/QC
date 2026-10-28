@@ -1,33 +1,32 @@
-import { Folder, Search, BarChart3, FileText } from "lucide-react"
+import { ClipboardList, Database, GitCompare, FileText } from "lucide-react"
 import { useStore } from "../store/useStore"
 
 const INFO = {
   1: {
-    icon: Folder,
-    title: "Étape 1 — Importer",
-    msg: "Pour de meilleurs résultats, importez aussi le dictionnaire des variables, le questionnaire et remplissez le contexte de l'enquête.",
+    icon: ClipboardList,
+    title: "Étape 1 — Questionnaire",
+    msg: "Élaborez un questionnaire structuré à partir de la note de cadrage, la méthodologie et les indicateurs.",
     grad: "linear-gradient(135deg, #EEEDFE 0%, #E1F5EE 50%, #FAEEDA 100%)",
     iconBg: "#3C3489",
   },
   2: {
-    icon: Search,
-    title: "Étape 2 — Détecter",
-    msg: "Trois onglets : Aperçu (profilage), QC basique (tests automatiques) et QC intelligent (règles IA). Tous les résultats sont exportables.",
+    icon: Database,
+    title: "Étape 2 — Collecte des données",
+    msg: "Chargez la base de données et lancez le contrôle qualité : profilage, tests automatiques et règles IA.",
     grad: "linear-gradient(135deg, #E6F1FB 0%, #EAF3DE 50%, #FAEEDA 100%)",
     iconBg: "#0C447C",
   },
   3: {
-    icon: BarChart3,
-    // Renommage demande par SISTA v2 : "Rapport QC" -> "Bilan par enqueteur"
-    title: "Étape 3 — Bilan par enquêteur",
-    msg: "Classement des enquêteurs selon les anomalies, validation formelle des cas, et génération du rapport de contrôle qualité pour audit.",
+    icon: GitCompare,
+    title: "Étape 3 — Back check",
+    msg: "Comparez la base source à une re-interview de contrôle : échantillon aléatoire, variables clés et rapport de comparaison.",
     grad: "linear-gradient(135deg, #FAEEDA 0%, #FCEBEB 50%, #EEEDFE 100%)",
     iconBg: "#A32D2D",
   },
   4: {
     icon: FileText,
-    title: "Étape 4 — Rapport analytique",
-    msg: "Générez le rapport Word destiné au commanditaire : tableaux, graphiques et interprétations rédigées par l'IA, modifiables avant le téléchargement.",
+    title: "Étape 4 — Rapport d'analyse",
+    msg: "Chargez la BD finale, le dictionnaire et le plan d'analyse pour générer le rapport Word avec tableaux et graphiques.",
     grad: "linear-gradient(135deg, #E1F5EE 0%, #E6F1FB 50%, #EEEDFE 100%)",
     iconBg: "#0F6E56",
   },
