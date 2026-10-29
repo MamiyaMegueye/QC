@@ -66,7 +66,30 @@ def _extract_json(text: str) -> Any:
     try:
         return json.loads(text)
     except json.JSONDecodeError:
-        return None
+        pass
+    # --- Tentative de reparation JSON ---
+    repaired = _repair_json_syntax(text)
+    if repaired:
+        try:
+            return json.loads(repaired)
+        except json.JSONDecodeError:
+            pass
+    return None
+
+
+def _repair_json_syntax(text: str) -> str:
+    """Repare les erreurs JSON courantes des LLM : virgules manquantes, trailing commas."""
+    if not text:
+        return text
+    # 1. Virgule manquante entre } et { ou entre } et "
+    text = re.sub(r'(\})\s*([{"])', r'\1,\2', text)
+    # 2. Virgule manquante entre ] et { ou entre ] et "
+    text = re.sub(r'(\])\s*([{"])', r'\1,\2', text)
+    # 3. Virgule manquante entre "valeur" et "cle"
+    text = re.sub(r'("\s*)\n(\s*")', r'\1,\n\2', text)
+    # 4. Trailing commas avant } ou ]
+    text = re.sub(r',\s*([}\]])', r'\1', text)
+    return text
 
 
 def _estimate_tokens(text: str) -> int:
