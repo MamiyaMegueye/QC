@@ -17,25 +17,25 @@ const INFO = {
     iconBg: "#0C447C",
   },
   3: {
+    icon: FileText,
+    title: "Étape 3 — Rapport QC",
+    msg: "Consultez le rapport de synthèse du contrôle qualité avec les statistiques et anomalies détectées.",
+    grad: "linear-gradient(135deg, #E1F5EE 0%, #E6F1FB 50%, #EEEDFE 100%)",
+    iconBg: "#0F6E56",
+  },
+  4: {
     icon: GitCompare,
-    title: "Étape 3 — Back check",
+    title: "Étape 4 — Back check",
     msg: "Comparez la base source à une re-interview de contrôle : échantillon aléatoire, variables clés et rapport de comparaison.",
     grad: "linear-gradient(135deg, #FAEEDA 0%, #FCEBEB 50%, #EEEDFE 100%)",
     iconBg: "#A32D2D",
   },
-  4: {
+  5: {
     icon: BarChart3,
-    title: "Étape 4 — Rapport d'analyse",
+    title: "Étape 5 — Rapport d'analyse",
     msg: "Générez le rapport analytique Word avec tableaux, graphiques et interprétations IA.",
     grad: "linear-gradient(135deg, #DCFCE7 0%, #D1FAE5 50%, #ECFDF5 100%)",
     iconBg: "#047857",
-  },
-  5: {
-    icon: FileText,
-    title: "Étape 5 — Rapport QC",
-    msg: "Consultez le rapport de synthèse du contrôle qualité avec les statistiques et anomalies détectées.",
-    grad: "linear-gradient(135deg, #E1F5EE 0%, #E6F1FB 50%, #EEEDFE 100%)",
-    iconBg: "#0F6E56",
   },
 }
 

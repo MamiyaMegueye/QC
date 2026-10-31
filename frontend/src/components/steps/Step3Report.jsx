@@ -36,7 +36,7 @@ export default function Step3Report() {
         <p className="text-gray-600 mb-4">
           Veuillez d'abord importer et analyser un fichier.
         </p>
-        <button onClick={() => store.setStep(4)} className="btn-secondary">
+        <button onClick={() => store.setStep(2)} className="btn-secondary">
           <ArrowLeft className="w-4 h-4 inline mr-1" /> Retour
         </button>
       </div>

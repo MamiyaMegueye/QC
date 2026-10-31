@@ -55,9 +55,9 @@ export default function App() {
 
         {currentStep === 1 && <Step1Questionnaire />}
         {currentStep === 2 && <Step2Collecte />}
-        {currentStep === 3 && <BackCheckPanel />}
-        {currentStep === 4 && <Step4AnalyticalReport />}
-        {currentStep === 5 && <Step3Report />}
+        {currentStep === 3 && <Step3Report />}
+        {currentStep === 4 && <BackCheckPanel />}
+        {currentStep === 5 && <Step4AnalyticalReport />}
       </div>
     </div>
   )
