@@ -27,7 +27,7 @@ export default function Stepper() {
     if (num === 2) return true
     if (num === 3) return true
     if (num === 4) return !!sessionId
-    if (num === 5) return !!sessionId
+    if (num === 5) return true
     return !!sessionId
   }
 
