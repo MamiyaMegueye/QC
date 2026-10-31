@@ -43,12 +43,17 @@ import numpy as np
 try:
     import matplotlib
     matplotlib.use("Agg")
+    # Fallback font config for serverless (no system fonts)
+    matplotlib.rcParams["font.family"] = "sans-serif"
+    matplotlib.rcParams["font.sans-serif"] = ["DejaVu Sans", "Arial", "Helvetica", "sans-serif"]
     import matplotlib.pyplot as plt
     from matplotlib.colors import LinearSegmentedColormap
     from matplotlib.patches import Rectangle
     HAS_MATPLOTLIB = True
-except ImportError:
+    print(f"[analytical_report] matplotlib {matplotlib.__version__} OK")
+except Exception as exc:
     HAS_MATPLOTLIB = False
+    print(f"[analytical_report] matplotlib NOT available: {exc}")
 
 from docx import Document
 from docx.shared import Inches, Pt, RGBColor, Cm
@@ -1487,9 +1492,16 @@ def render_chart(item: dict, kind: str) -> bytes:
     if fn is None:
         return b""
     try:
-        return fn(item)
+        result = fn(item)
+        if result:
+            print(f"[render_chart] '{kind}' -> {len(result)} bytes PNG")
+        else:
+            print(f"[render_chart] '{kind}' -> None (no output)")
+        return result
     except Exception as e:
-        print(f"Erreur rendu chart '{kind}' : {e}")
+        import traceback
+        print(f"[render_chart] ERREUR '{kind}': {e}")
+        traceback.print_exc()
         return b""
 
 
@@ -1643,9 +1655,15 @@ def build_report_content(
                 res = compute_univariate(df, var_by_name[u["name"]])
                 res["category"] = u.get("category", "principale")
                 if "error" not in res:
-                    png_bytes = render_chart(res, res["chart"])
+                    chart_type = res.get("chart", "unknown")
+                    png_bytes = render_chart(res, chart_type)
                     if png_bytes:
                         res["chart_base64"] = base64.b64encode(png_bytes).decode("ascii")
+                        if progress_cb:
+                            progress_cb(f"  Graphe {chart_type} pour {res.get('name','')} ({len(png_bytes)} bytes)")
+                    else:
+                        if progress_cb:
+                            progress_cb(f"  Pas de graphe pour {res.get('name','')} (type={chart_type}, matplotlib={HAS_MATPLOTLIB})")
                 univariate_results.append(res)
             except Exception as e:
                 if progress_cb:
