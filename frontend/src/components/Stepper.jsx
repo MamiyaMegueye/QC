@@ -6,8 +6,8 @@ const STEPS = [
   { num: 1, label: "Questionnaire", shortLabel: "Quest.", color: "from-accent-violet to-purple-600", ring: "ring-accent-violet/15", text: "text-accent-violet" },
   { num: 2, label: "Collecte", shortLabel: "Collecte", color: "from-accent-sky to-blue-600", ring: "ring-accent-sky/15", text: "text-accent-sky" },
   { num: 3, label: "Back check", shortLabel: "B. check", color: "from-accent-teal to-emerald-600", ring: "ring-accent-teal/15", text: "text-accent-teal" },
-  { num: 4, label: "Rapport QC", shortLabel: "Rapport", color: "from-gold to-amber-500", ring: "ring-gold/15", text: "text-gold-deep" },
-  { num: 5, label: "Rapport d'analyse", shortLabel: "Analyse", color: "from-emerald-500 to-green-600", ring: "ring-emerald-500/15", text: "text-emerald-700" },
+  { num: 4, label: "Rapport d'analyse", shortLabel: "Analyse", color: "from-emerald-500 to-green-600", ring: "ring-emerald-500/15", text: "text-emerald-700" },
+  { num: 5, label: "Rapport QC", shortLabel: "Rapport", color: "from-gold to-amber-500", ring: "ring-gold/15", text: "text-gold-deep" },
 ]
 
 export default function Stepper() {

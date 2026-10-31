@@ -1594,3 +1594,139 @@ Réponds UNIQUEMENT en JSON valide :
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(500, f"Erreur diagnostic programme : {_clean_error_msg(e)}")
+
+
+# ============================================================================
+#  RAPPORT D'ANALYSE INDEPENDANT (Step 5)
+#  Upload fichier → profiling → scope → preview → download Word
+# ============================================================================
+
+# Stockage en memoire des sessions rapport (separe des sessions QC)
+REPORT_SESSIONS: dict = {}
+
+@app.post("/api/report/upload")
+async def report_upload(
+    data_file: UploadFile = File(...),
+    dict_file: Optional[UploadFile] = File(None),
+):
+    """Upload un fichier pour le rapport analytique (independant du QC)."""
+    try:
+        data_path = _save_upload(data_file)
+        dict_path = _save_upload(dict_file) if dict_file else None
+        loaded = load_file(data_path, dict_path)
+        profile = profile_dataset(loaded)
+        mp = auto_map(loaded.df.columns)
+
+        report_id = str(uuid.uuid4())
+        REPORT_SESSIONS[report_id] = {
+            "loaded": loaded,
+            "profile": profile,
+            "mp": mp,
+            "filename": data_file.filename,
+            "report_content": None,
+            "_created": time.time(),
+        }
+
+        scope = analytical_report.compute_analysis_scope(profile, mp)
+
+        return {
+            "ok": True,
+            "report_id": report_id,
+            "filename": data_file.filename,
+            "n_rows": int(loaded.df.shape[0]),
+            "n_columns": len(loaded.df.columns),
+            "scope": scope,
+        }
+    except Exception as e:
+        raise HTTPException(500, f"Erreur de lecture du fichier : {_clean_error_msg(e)}")
+
+
+@app.get("/api/report/{report_id}/scope")
+def report_scope(report_id: str):
+    """Perimetre d'analyse pour une session rapport independante."""
+    rsess = REPORT_SESSIONS.get(report_id)
+    if not rsess:
+        raise HTTPException(404, "Session rapport introuvable ou expiree.")
+    scope = analytical_report.compute_analysis_scope(rsess["profile"], rsess.get("mp"))
+    return {"ok": True, **scope}
+
+
+@app.post("/api/report/{report_id}/generate")
+async def report_generate(
+    report_id: str,
+    api: str = Form("api1"),
+    api_key: str = Form(""),
+    survey_type: str = Form(""),
+    survey_description: str = Form(""),
+    survey_population: str = Form(""),
+    survey_eligibility: str = Form(""),
+):
+    """Genere le rapport analytique (preview JSON) pour une session independante."""
+    rsess = REPORT_SESSIONS.get(report_id)
+    if not rsess:
+        raise HTTPException(404, "Session rapport introuvable ou expiree.")
+
+    key_to_use = _resolve_api_key(api, api_key)
+    if not key_to_use:
+        raise HTTPException(400, "Aucune cle API disponible")
+
+    progress_log = []
+    def progress_cb(msg):
+        progress_log.append(msg)
+        print(f"[REPORT-INDEP] {msg}")
+
+    try:
+        survey_context = {
+            "type": survey_type,
+            "description": survey_description,
+            "population": survey_population,
+            "eligibility": survey_eligibility,
+        }
+
+        content = analytical_report.build_report_content(
+            api=api,
+            api_key=key_to_use,
+            df=rsess["loaded"].df,
+            profile=rsess["profile"],
+            survey_context=survey_context,
+            filename=rsess["filename"],
+            qc_results=[],
+            qc_stats=None,
+            progress_cb=progress_cb,
+            mp=rsess.get("mp"),
+        )
+
+        rsess["report_content"] = content
+
+        return {
+            "ok": True,
+            "content": content,
+            "progress": progress_log,
+        }
+    except Exception as e:
+        raise HTTPException(500, f"Erreur de generation : {_clean_error_msg(e)}")
+
+
+@app.post("/api/report/{report_id}/download")
+async def report_download(report_id: str, report_content: dict = Body(None)):
+    """Telecharge le rapport Word pour une session independante."""
+    rsess = REPORT_SESSIONS.get(report_id)
+    if not rsess:
+        raise HTTPException(404, "Session rapport introuvable ou expiree.")
+
+    content = report_content or rsess.get("report_content")
+    if not content:
+        raise HTTPException(404, "Aucun rapport genere. Lancez d'abord la generation.")
+
+    try:
+        docx_bytes = analytical_report.compose_word_from_content(content)
+        base = rsess["filename"].rsplit(".", 1)[0]
+        out_filename = f"{base}_rapport_analytique.docx"
+
+        return StreamingResponse(
+            io.BytesIO(docx_bytes),
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={"Content-Disposition": f'attachment; filename="{out_filename}"'}
+        )
+    except Exception as e:
+        raise HTTPException(500, f"Erreur Word : {_clean_error_msg(e)}")

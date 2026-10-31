@@ -396,3 +396,66 @@ export const api = {
     return { blob, filename }
   },
 }
+
+// ====================================================================
+//  RAPPORT D'ANALYSE INDEPENDANT (Step 5)
+// ====================================================================
+
+api.reportUpload = async (dataFile, dictFile) => {
+  const formData = new FormData()
+  formData.append("data_file", dataFile)
+  if (dictFile) formData.append("dict_file", dictFile)
+  const res = await authFetch(`${API_URL}/api/report/upload`, {
+    method: "POST",
+    body: formData,
+  }, LONG_TIMEOUT)
+  if (!res.ok) {
+    let msg = `Erreur ${res.status}`
+    try { const d = await res.json(); msg = d.detail || msg } catch {}
+    throw new Error(msg)
+  }
+  return res.json()
+}
+
+api.reportScope = async (reportId) => {
+  const res = await authFetch(`${API_URL}/api/report/${reportId}/scope`)
+  return res.ok ? res.json() : null
+}
+
+api.reportGenerate = async (reportId, payload) => {
+  const formData = new FormData()
+  formData.append("api", payload.api || "api1")
+  formData.append("api_key", payload.api_key || "")
+  formData.append("survey_type", payload.survey_type || "")
+  formData.append("survey_description", payload.survey_description || "")
+  formData.append("survey_population", payload.survey_population || "")
+  formData.append("survey_eligibility", payload.survey_eligibility || "")
+  const res = await authFetch(`${API_URL}/api/report/${reportId}/generate`, {
+    method: "POST",
+    body: formData,
+  }, LONG_TIMEOUT)
+  if (!res.ok) {
+    let msg = `Erreur ${res.status}`
+    try { const d = await res.json(); msg = d.detail || msg } catch {}
+    throw new Error(msg)
+  }
+  return res.json()
+}
+
+api.reportDownload = async (reportId, reportContent = null) => {
+  const res = await authFetch(
+    `${API_URL}/api/report/${reportId}/download`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(reportContent),
+    },
+    LONG_TIMEOUT,
+  )
+  if (!res.ok) {
+    let msg = `Erreur ${res.status}`
+    try { const d = await res.json(); msg = d.detail || msg } catch {}
+    throw new Error(msg)
+  }
+  return res.blob()
+}
