@@ -1604,6 +1604,35 @@ Réponds UNIQUEMENT en JSON valide :
 # Stockage en memoire des sessions rapport (separe des sessions QC)
 REPORT_SESSIONS: dict = {}
 
+import pickle as _pickle
+
+_REPORT_TMP_DIR = "/tmp/report_sessions"
+os.makedirs(_REPORT_TMP_DIR, exist_ok=True)
+
+def _persist_report_session(report_id: str, rsess: dict):
+    """Sauvegarde la session rapport dans /tmp pour survie serverless."""
+    try:
+        path = os.path.join(_REPORT_TMP_DIR, f"{report_id}.pkl")
+        with open(path, "wb") as f:
+            _pickle.dump(rsess, f)
+    except Exception as e:
+        print(f"[REPORT] Erreur sauvegarde session: {e}")
+
+def _load_report_session(report_id: str) -> dict | None:
+    """Charge la session depuis /tmp si pas en memoire."""
+    if report_id in REPORT_SESSIONS:
+        return REPORT_SESSIONS[report_id]
+    try:
+        path = os.path.join(_REPORT_TMP_DIR, f"{report_id}.pkl")
+        if os.path.exists(path):
+            with open(path, "rb") as f:
+                rsess = _pickle.load(f)
+            REPORT_SESSIONS[report_id] = rsess
+            return rsess
+    except Exception as e:
+        print(f"[REPORT] Erreur chargement session: {e}")
+    return None
+
 @app.post("/api/report/upload")
 async def report_upload(
     data_file: UploadFile = File(...),
@@ -1618,7 +1647,7 @@ async def report_upload(
         mp = auto_map(loaded.df.columns)
 
         report_id = str(uuid.uuid4())
-        REPORT_SESSIONS[report_id] = {
+        rsess = {
             "loaded": loaded,
             "profile": profile,
             "mp": mp,
@@ -1626,6 +1655,8 @@ async def report_upload(
             "report_content": None,
             "_created": time.time(),
         }
+        REPORT_SESSIONS[report_id] = rsess
+        _persist_report_session(report_id, rsess)
 
         scope = analytical_report.compute_analysis_scope(profile, mp)
 
@@ -1644,7 +1675,7 @@ async def report_upload(
 @app.get("/api/report/{report_id}/scope")
 def report_scope(report_id: str):
     """Perimetre d'analyse pour une session rapport independante."""
-    rsess = REPORT_SESSIONS.get(report_id)
+    rsess = _load_report_session(report_id)
     if not rsess:
         raise HTTPException(404, "Session rapport introuvable ou expiree.")
     scope = analytical_report.compute_analysis_scope(rsess["profile"], rsess.get("mp"))
@@ -1662,7 +1693,7 @@ async def report_generate(
     survey_eligibility: str = Form(""),
 ):
     """Genere le rapport analytique (preview JSON) pour une session independante."""
-    rsess = REPORT_SESSIONS.get(report_id)
+    rsess = _load_report_session(report_id)
     if not rsess:
         raise HTTPException(404, "Session rapport introuvable ou expiree.")
 
@@ -1697,6 +1728,7 @@ async def report_generate(
         )
 
         rsess["report_content"] = content
+        _persist_report_session(report_id, rsess)
 
         return {
             "ok": True,
@@ -1710,17 +1742,22 @@ async def report_generate(
 @app.post("/api/report/{report_id}/download")
 async def report_download(report_id: str, report_content: dict = Body(None)):
     """Telecharge le rapport Word pour une session independante."""
-    rsess = REPORT_SESSIONS.get(report_id)
-    if not rsess:
-        raise HTTPException(404, "Session rapport introuvable ou expiree.")
+    # Le contenu du rapport est envoye dans le body par le frontend
+    # La session en memoire peut ne plus exister (serverless)
+    content = report_content
+    rsess = _load_report_session(report_id)
 
-    content = report_content or rsess.get("report_content")
+    if not content and rsess:
+        content = rsess.get("report_content")
+
     if not content:
-        raise HTTPException(404, "Aucun rapport genere. Lancez d'abord la generation.")
+        raise HTTPException(400, "Contenu du rapport manquant. Veuillez regenerer le rapport.")
 
     try:
         docx_bytes = analytical_report.compose_word_from_content(content)
-        base = rsess["filename"].rsplit(".", 1)[0]
+        # Extraire le nom du fichier depuis le contenu du rapport
+        meta = content.get("meta", {})
+        base = (meta.get("filename") or "rapport").rsplit(".", 1)[0]
         out_filename = f"{base}_rapport_analytique.docx"
 
         return StreamingResponse(
