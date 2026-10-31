@@ -1,4 +1,4 @@
-import { ClipboardList, Database, GitCompare, FileText } from "lucide-react"
+import { ClipboardList, Database, GitCompare, FileText, BarChart3 } from "lucide-react"
 import { useStore } from "../store/useStore"
 
 const INFO = {
@@ -25,10 +25,17 @@ const INFO = {
   },
   4: {
     icon: FileText,
-    title: "Étape 4 — Rapport d'analyse",
-    msg: "Chargez la BD finale, le dictionnaire et le plan d'analyse pour générer le rapport Word avec tableaux et graphiques.",
+    title: "Étape 4 — Rapport QC",
+    msg: "Consultez le rapport de synthèse du contrôle qualité avec les statistiques et anomalies détectées.",
     grad: "linear-gradient(135deg, #E1F5EE 0%, #E6F1FB 50%, #EEEDFE 100%)",
     iconBg: "#0F6E56",
+  },
+  5: {
+    icon: BarChart3,
+    title: "Étape 5 — Rapport d'analyse",
+    msg: "Générez le rapport analytique Word avec tableaux, graphiques et interprétations IA.",
+    grad: "linear-gradient(135deg, #DCFCE7 0%, #D1FAE5 50%, #ECFDF5 100%)",
+    iconBg: "#047857",
   },
 }
 

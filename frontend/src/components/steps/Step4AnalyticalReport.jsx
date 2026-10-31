@@ -767,7 +767,7 @@ export default function Step4AnalyticalReport() {
 
       {/* Toolbar du bas */}
       <div className="bg-white rounded-2xl p-4 shadow-card border border-gray-200 flex items-center justify-between flex-wrap gap-3 mb-6">
-        <button onClick={() => store.setStep(3)} className="btn-secondary">
+        <button onClick={() => store.setStep(4)} className="btn-secondary">
           <ArrowLeft className="w-4 h-4 inline mr-1" />
           Retour au rapport QC
         </button>
