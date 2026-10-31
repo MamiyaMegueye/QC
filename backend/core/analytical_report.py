@@ -1647,6 +1647,7 @@ def build_report_content(
 
     # Calculs + graphes univaries
     if progress_cb:
+        progress_cb(f"matplotlib disponible : {HAS_MATPLOTLIB}")
         progress_cb(f"Calcul de {len(plan['univariate'])} analyses univariees...")
     univariate_results = []
     for u in plan["univariate"]:
