@@ -1730,3 +1730,35 @@ async def report_download(report_id: str, report_content: dict = Body(None)):
         )
     except Exception as e:
         raise HTTPException(500, f"Erreur Word : {_clean_error_msg(e)}")
+
+
+# ── DIAGNOSTIC matplotlib ──
+@app.get("/api/debug/matplotlib")
+def debug_matplotlib():
+    """Endpoint de test pour verifier si matplotlib fonctionne sur Vercel."""
+    info = {"has_matplotlib": False, "error": None, "chart_base64": None}
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        info["has_matplotlib"] = True
+        info["matplotlib_version"] = matplotlib.__version__
+        info["backend"] = matplotlib.get_backend()
+
+        # Test: generer un petit graphe
+        fig, ax = plt.subplots(figsize=(4, 3))
+        ax.bar(["A", "B", "C"], [10, 20, 15], color=["#1B2A4A", "#C8A951", "#2D7D9F"])
+        ax.set_title("Test matplotlib")
+
+        import io, base64
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", dpi=72, bbox_inches="tight")
+        plt.close(fig)
+        buf.seek(0)
+        info["chart_base64"] = base64.b64encode(buf.read()).decode("ascii")
+        info["chart_size_bytes"] = len(info["chart_base64"])
+    except Exception as e:
+        import traceback
+        info["error"] = str(e)
+        info["traceback"] = traceback.format_exc()
+    return info
